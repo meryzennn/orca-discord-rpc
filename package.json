@@ -1,0 +1,40 @@
+{
+  "name": "orca-discord-rpc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord Rich Presence for Orca — reflects the active worktree and running agent.",
+  "license": "MIT",
+  "author": {
+    "name": "masarezenn"
+  },
+  "main": "out/main.cjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "orca-discord-rpc": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/cli.ts start",
+    "stop": "node src/cli.ts stop",
+    "status": "node src/cli.ts status",
+    "test": "node --test \"src/*.test.ts\" \"config/scripts/*.test.mjs\"",
+    "typecheck": "tsc --noEmit",
+    "icons": "node config/scripts/build-icons.mjs",
+    "build:app": "node config/scripts/build-app.mjs",
+    "build:win": "npm run build:app && electron-builder --win --config electron-builder.yml",
+    "dist": "npm run build:win",
+    "dev:app": "npm run build:app && electron out/main.cjs"
+  },
+  "dependencies": {
+    "@xhayper/discord-rpc": "^1.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.2"
+  }
+}

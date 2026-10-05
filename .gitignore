@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.superpowers/
+out/
+dist-installer/
+release/
+release-clean/
+dist-fixed/
+build-output/
+tmp-build/
+tmp-build2/
+.commandcode/
+docs/superpowers/
