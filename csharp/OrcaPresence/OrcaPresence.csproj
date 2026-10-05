@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>OrcaPresence</AssemblyName>
+    <RootNamespace>OrcaPresence</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Why net48: the in-box framework, so no runtime install is needed on the user's machine. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- Why a package: System.Text.Json is inbox from .NET Core 3.0 on, but not on .NET Framework. -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+</Project>
