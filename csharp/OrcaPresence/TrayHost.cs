@@ -76,7 +76,7 @@ namespace OrcaPresence
             }
         }
 
-        public async Task CheckUpdateAsync(bool notifyIfLatest = false)
+        public async Task CheckUpdateAsync()
         {
             var update = await UpdateChecker.CheckForUpdateAsync().ConfigureAwait(false);
             if (_disposed)
@@ -104,24 +104,52 @@ namespace OrcaPresence
                     Apply(_runtime.Status);
                 });
             }
-            else if (notifyIfLatest)
+        }
+
+        public async Task CheckUpdateManuallyAsync()
+        {
+            try
             {
-                SafeInvoke(() =>
-                {
-                    try
-                    {
-                        _icon.ShowBalloonTip(
-                            3000,
-                            TrayStatus.AppDisplayName,
-                            "You are on the latest version (" + UpdateChecker.CurrentVersion + ").",
-                            ToolTipIcon.Info);
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
-                });
+                _icon.ShowBalloonTip(1500, TrayStatus.AppDisplayName, "Checking for updates...", ToolTipIcon.Info);
             }
+            catch
+            {
+                // ignore
+            }
+
+            var update = await UpdateChecker.CheckForUpdateAsync().ConfigureAwait(false);
+            if (_disposed)
+            {
+                return;
+            }
+
+            SafeInvoke(() =>
+            {
+                if (update.HasUpdate)
+                {
+                    _availableUpdate = update;
+                    Apply(_runtime.Status);
+
+                    var choice = MessageBox.Show(
+                        "A new version (" + update.LatestVersion + ") is available!\n\nWould you like to download and install it now?",
+                        "Update Available",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information);
+
+                    if (choice == DialogResult.Yes)
+                    {
+                        PerformAutoUpdate(update);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "You are on the latest version of Orca Presence (" + UpdateChecker.CurrentVersion + ").",
+                        "Orca Presence",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+            });
         }
 
         private void PerformAutoUpdate(UpdateInfo update)
@@ -132,18 +160,40 @@ namespace OrcaPresence
             }
 
             _updating = true;
-            try
+
+            var loadingForm = new Form
             {
-                _icon.ShowBalloonTip(
-                    5000,
-                    "Updating Orca Presence",
-                    "Downloading " + update.LatestVersion + "... The app will restart automatically.",
-                    ToolTipIcon.Info);
-            }
-            catch
+                Text = "Updating Orca Presence",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterScreen,
+                ClientSize = new Size(340, 110),
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = true,
+                TopMost = true
+            };
+
+            var label = new Label
             {
-                // ignore
-            }
+                Text = "Downloading update " + update.LatestVersion + "...\nPlease wait, the app will restart automatically.",
+                AutoSize = false,
+                Size = new Size(310, 38),
+                Location = new Point(15, 14),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular)
+            };
+
+            var progress = new ProgressBar
+            {
+                Style = ProgressBarStyle.Marquee,
+                MarqueeAnimationSpeed = 30,
+                Size = new Size(310, 22),
+                Location = new Point(15, 60)
+            };
+
+            loadingForm.Controls.Add(label);
+            loadingForm.Controls.Add(progress);
+            loadingForm.Show();
+            loadingForm.Refresh();
 
             Task.Run(async () =>
             {
@@ -151,25 +201,25 @@ namespace OrcaPresence
                 var success = await UpdateChecker.DownloadAndInstallUpdateAsync(update, currentExe).ConfigureAwait(false);
                 if (success)
                 {
-                    SafeInvoke(() => Application.Exit());
+                    SafeInvoke(() =>
+                    {
+                        loadingForm.Close();
+                        loadingForm.Dispose();
+                        Application.Exit();
+                    });
                 }
                 else
                 {
                     _updating = false;
                     SafeInvoke(() =>
                     {
-                        try
-                        {
-                            _icon.ShowBalloonTip(
-                                5000,
-                                "Update Notice",
-                                "Auto-update could not complete. Opening the release page in your browser.",
-                                ToolTipIcon.Warning);
-                        }
-                        catch
-                        {
-                            // ignore
-                        }
+                        loadingForm.Close();
+                        loadingForm.Dispose();
+                        MessageBox.Show(
+                            "Could not complete the automatic update.\nOpening the release page in your browser instead.",
+                            "Update Notice",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
                         OpenUrl(update.Url);
                     });
                 }
@@ -347,7 +397,7 @@ namespace OrcaPresence
             if (_availableUpdate == null || !_availableUpdate.HasUpdate)
             {
                 var checkItem = new ToolStripMenuItem("Check for updates...", DownloadIcon);
-                checkItem.Click += (_, __) => { var ignored = CheckUpdateAsync(notifyIfLatest: true); };
+                checkItem.Click += (_, __) => { var ignored = CheckUpdateManuallyAsync(); };
                 menu.Items.Add(checkItem);
             }
 
