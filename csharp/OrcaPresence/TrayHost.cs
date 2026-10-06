@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace OrcaPresence
@@ -15,6 +17,7 @@ namespace OrcaPresence
         private readonly PresenceRuntime _runtime;
         private readonly NotifyIcon _icon;
         private readonly System.Threading.Timer _trimTimer;
+        private UpdateInfo? _availableUpdate;
         private bool _disposed;
 
         public TrayHost(AppConfig config)
@@ -33,6 +36,14 @@ namespace OrcaPresence
                 Visible = true
             };
             _runtime.StatusChanged += status => Apply(status);
+
+            _icon.BalloonTipClicked += (_, __) =>
+            {
+                if (_availableUpdate != null && _availableUpdate.HasUpdate)
+                {
+                    OpenUrl(_availableUpdate.Url);
+                }
+            };
 
             // Why: drops RAM from ~40 MB to ~8 MB by releasing unneeded startup pages back to Windows.
             _trimTimer = new System.Threading.Timer(_ => MemoryTrimmer.Trim(), null, 10_000, 300_000);
@@ -54,6 +65,29 @@ namespace OrcaPresence
             {
                 // ignore
             }
+
+            // Why: check for updates once in the background without delaying startup or adding CPU overhead.
+            Task.Run(async () =>
+            {
+                var update = await UpdateChecker.CheckForUpdateAsync().ConfigureAwait(false);
+                if (update.HasUpdate && !_disposed)
+                {
+                    _availableUpdate = update;
+                    try
+                    {
+                        _icon.ShowBalloonTip(
+                            5000,
+                            "Update Available!",
+                            "Version " + update.LatestVersion + " is available. Click to download.",
+                            ToolTipIcon.Info);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
+                    Apply(_runtime.Status);
+                }
+            });
         }
 
         public void Dispose()
@@ -137,6 +171,16 @@ namespace OrcaPresence
         {
             var menu = new ContextMenuStrip();
 
+            // Why: when an update is available, make it prominent at the top so the user can update in one click.
+            if (_availableUpdate != null && _availableUpdate.HasUpdate)
+            {
+                var updateItem = new ToolStripMenuItem("⭐ Update to " + _availableUpdate.LatestVersion + " (Click to download)");
+                updateItem.Font = new Font(menu.Font, FontStyle.Bold);
+                updateItem.Click += (_, __) => OpenUrl(_availableUpdate.Url);
+                menu.Items.Add(updateItem);
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
             var header = new ToolStripMenuItem(TrayStatus.AppDisplayName) { Enabled = false };
             menu.Items.Add(header);
 
@@ -182,6 +226,11 @@ namespace OrcaPresence
             };
             menu.Items.Add(startWithWindows);
 
+            // Why: lets users easily find the project repo and star it.
+            var starItem = new ToolStripMenuItem("⭐ Star on GitHub");
+            starItem.Click += (_, __) => OpenUrl(UpdateChecker.RepoUrl);
+            menu.Items.Add(starItem);
+
             menu.Items.Add(new ToolStripSeparator());
 
             var quit = new ToolStripMenuItem("Quit");
@@ -192,6 +241,18 @@ namespace OrcaPresence
             menu.Items.Add(quit);
 
             return menu;
+        }
+
+        private static void OpenUrl(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch
+            {
+                // ignore
+            }
         }
     }
 }
