@@ -28,13 +28,22 @@ Two ways to run it, sharing the same presence rules:
 Build or download `OrcaPresence.exe`, then install it into your own profile:
 
 ```sh
-OrcaPresence.exe --install     # copies itself to %LOCALAPPDATA% and sets it to run at login
+OrcaPresence.exe --install     # copies itself to %LOCALAPPDATA% and turns on start-at-login
 OrcaPresence.exe --status      # what is installed and what the autostart entry points at
-OrcaPresence.exe --uninstall   # removes both
+OrcaPresence.exe --uninstall   # removes both the copy and the entry
+```
+
+Start-at-login can be changed on its own, without reinstalling — from the command line or from
+the tray menu's **Start with Windows** row:
+
+```sh
+OrcaPresence.exe autostart enable
+OrcaPresence.exe autostart disable
+OrcaPresence.exe autostart status
 ```
 
 No installer, no administrator prompt: the copy lands in `%LOCALAPPDATA%\orca-discord-rpc\` and
-the autostart entry goes under `HKEY_CURRENT_USER`, which the user already owns.
+the entry goes under `HKEY_CURRENT_USER`, which the user already owns.
 
 > Only one copy may run. A second launch exits immediately, so two presences can never fight over
 > the profile.
@@ -82,7 +91,7 @@ The tray icon is the control surface. Right-click it for the current state:
 | `Problem` | The last push failed, with the reason |
 
 Below the state: **Disable/Enable presence**, **Reconnect to Discord** (only while Discord is
-missing), the application id in use, and **Quit**.
+missing), the application id in use, a checkable **Start with Windows** row, and **Quit**.
 
 The tray app never opens a window and never takes focus, and only one copy can run at a time.
 

@@ -24,6 +24,12 @@ namespace OrcaPresence
                 return SelfInstall.Run(args);
             }
 
+            // Why its own command: turning the login start on and off must not need a reinstall.
+            if (args.Length > 0 && Autostart.Parse(args) != AutostartCommand.None)
+            {
+                return RunAutostartCommand(args);
+            }
+
             // Why: probes exist so the app can be checked against the real CLI, Discord and Orca
             // without a window. They are development-only and exit on their own.
             if (args.Length > 0 && args[0].StartsWith("--probe", StringComparison.Ordinal))
@@ -57,6 +63,37 @@ namespace OrcaPresence
                 }
 
                 return 0;
+            }
+        }
+
+        /// <summary>
+        /// Turns the login start on or off. Targets the installed copy when there is one, so
+        /// running this from a build folder does not register the build folder.
+        /// </summary>
+        private static int RunAutostartCommand(string[] args)
+        {
+            var autostart = new Autostart();
+            var installed = SelfInstall.InstallTargetPath();
+            var target = System.IO.File.Exists(installed)
+                ? installed
+                : System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
+
+            switch (Autostart.Parse(args))
+            {
+                case AutostartCommand.Enable:
+                    autostart.Enable(target);
+                    Console.WriteLine("start with Windows: on");
+                    Console.WriteLine("target: " + target);
+                    return 0;
+
+                case AutostartCommand.Disable:
+                    autostart.Disable();
+                    Console.WriteLine("start with Windows: off");
+                    return 0;
+
+                default:
+                    Console.WriteLine("start with Windows: " + (autostart.Value ?? "(off)"));
+                    return 0;
             }
         }
     }

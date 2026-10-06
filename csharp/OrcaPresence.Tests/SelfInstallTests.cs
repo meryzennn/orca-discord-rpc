@@ -26,8 +26,8 @@ namespace OrcaPresence.Tests
         public void PutsTheAutostartEntryUnderTheUsersOwnKey()
         {
             // Why per-user: an install must not need an administrator.
-            Assert.Contains("HKEY_CURRENT_USER", SelfInstall.AutostartKeyPath);
-            Assert.DoesNotContain("HKEY_LOCAL_MACHINE", SelfInstall.AutostartKeyPath);
+            Assert.Contains("HKEY_CURRENT_USER", RegistryAutostartStore.KeyPath);
+            Assert.DoesNotContain("HKEY_LOCAL_MACHINE", RegistryAutostartStore.KeyPath);
         }
 
         [Fact]

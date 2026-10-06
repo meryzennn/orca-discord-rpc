@@ -15,18 +15,11 @@ namespace OrcaPresence
     }
 
     /// <summary>
-    /// Installs the app without an installer: the exe copies itself somewhere durable and writes
-    /// its own autostart entry under the user's own registry key, so no administrator is needed.
+    /// Moves the app somewhere durable and runs it from there. No installer and no administrator:
+    /// the copy lands in the user's own AppData and the autostart entry is theirs too.
     /// </summary>
     public static class SelfInstall
     {
-        public const string RunValueName = "OrcaDiscordPresence";
-
-        private const string RunKeyPath =
-            @"Software\Microsoft\Windows\CurrentVersion\Run";
-
-        public static string AutostartKeyPath => @"HKEY_CURRENT_USER\" + RunKeyPath;
-
         private const string InstallDirectoryName = "orca-discord-rpc";
         private const string InstalledExeName = "OrcaPresence.exe";
 
@@ -71,7 +64,7 @@ namespace OrcaPresence
             foreach (var path in Directory.GetFiles(sourceDirectory))
             {
                 var name = Path.GetFileName(path);
-                // Why skipped: a symbol file is not needed to run, and a config is per-machine.
+                // Why skipped: a symbol file is not needed to run.
                 if (name.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -108,20 +101,26 @@ namespace OrcaPresence
             Directory.CreateDirectory(targetDirectory);
 
             var copied = 0;
-            if (!string.Equals(sourceDirectory.TrimEnd('\\'), targetDirectory.TrimEnd('\\'),
-                    StringComparison.OrdinalIgnoreCase))
+            // Why compared by directory: installing from the published folder into the install
+            // folder must copy, but reinstalling over itself must not.
+            if (!SameDirectory(sourceDirectory, targetDirectory))
             {
                 foreach (var name in FilesToCopy(sourceDirectory))
                 {
-                    File.Copy(Path.Combine(sourceDirectory, name), Path.Combine(targetDirectory, name), overwrite: true);
+                    File.Copy(
+                        Path.Combine(sourceDirectory, name),
+                        Path.Combine(targetDirectory, name),
+                        overwrite: true);
                     copied++;
                 }
             }
 
-            Microsoft.Win32.Registry.SetValue(AutostartKeyPath, RunValueName, "\"" + target + "\"");
+            var autostart = new Autostart();
+            autostart.Enable(target);
+
             Console.WriteLine("installed to " + target);
             Console.WriteLine("files copied: " + copied);
-            Console.WriteLine("autostart entry: " + AutostartKeyPath + "\\" + RunValueName);
+            Console.WriteLine("start with Windows: " + (autostart.IsEnabled ? "on" : "off"));
             return 0;
         }
 
@@ -129,21 +128,15 @@ namespace OrcaPresence
         {
             var targetDirectory = InstallTargetDirectory();
 
-            // Why deleted first: a removed autostart entry with a lingering binary is harmless, but
-            // a lingering binary that still starts on login is not.
-            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true))
-            {
-                if (key != null && key.GetValue(RunValueName) != null)
-                {
-                    key.DeleteValue(RunValueName, throwOnMissingValue: false);
-                }
-            }
-
             if (IsRunningFromInstall())
             {
                 Console.WriteLine("run this from the published exe, not the installed copy, to remove it");
                 return 1;
             }
+
+            // Why first: a removed autostart entry with a lingering binary is harmless, but a
+            // lingering binary that still starts on login is not.
+            new Autostart().Disable();
 
             if (Directory.Exists(targetDirectory))
             {
@@ -158,18 +151,25 @@ namespace OrcaPresence
 
         private static int Status()
         {
-            var entry = Microsoft.Win32.Registry.GetValue(AutostartKeyPath, RunValueName, null) as string;
+            var autostart = new Autostart();
             var target = InstallTargetPath();
-            Console.WriteLine("autostart: " + (entry ?? "(not set)"));
-            Console.WriteLine("installed copy: " + (File.Exists(target) ? target : "(missing)"));
             var directory = InstallTargetDirectory();
-            Console.WriteLine("files installed: " + (Directory.Exists(directory) ? Directory.GetFiles(directory).Length : 0));
+
+            Console.WriteLine("start with Windows: " + (autostart.Value ?? "(off)"));
+            Console.WriteLine("points at the installed copy: " + autostart.PointsAt(target));
+            Console.WriteLine("installed copy: " + (File.Exists(target) ? target : "(missing)"));
+            Console.WriteLine("files installed: " +
+                              (Directory.Exists(directory) ? Directory.GetFiles(directory).Length : 0));
             Console.WriteLine("this exe: " + ExecutablePath());
             return 0;
         }
 
-        private static bool IsRunningFromInstall() =>
-            string.Equals(ExecutablePath(), InstallTargetPath(), StringComparison.OrdinalIgnoreCase);
+        private static bool SameDirectory(string a, string b) =>
+            string.Equals(a.TrimEnd('\\'), b.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsRunningFromInstall() => SameDirectory(
+            Path.GetDirectoryName(ExecutablePath())!,
+            InstallTargetDirectory());
 
         private static string ExecutablePath() =>
             Assembly.GetExecutingAssembly().Location.Length > 0
