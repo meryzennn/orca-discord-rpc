@@ -16,3 +16,8 @@ docs/superpowers/
 csharp/**/bin/
 csharp/**/obj/
 dist-csharp/
+csharp-state.txt
+*.csharp.txt
+probe.log
+tray.log
+daemon.log

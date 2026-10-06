@@ -55,8 +55,11 @@ dotnet test csharp/OrcaPresence.Tests                  # 79 tests
 | Line 1 | The featured agent, plus `+N` when other agents are open — `Claude +1` |
 | Line 2 | The workspace folder, then `Working` or `Idle` |
 | Timer | Elapsed since you switched workspace |
-| Large image | The agent's artwork, when it is registered (see below) |
 | Small image | A branch icon; its tooltip is the branch name |
+
+There is no per-agent logo. Discord renders only artwork registered on the application and
+accepts no external image, so a logo would need an upload step on every agent — the agent's name
+already says which one is running.
 
 The **featured agent** is the one that most recently entered its state — so opening Codex shows
 `Codex`, and its name stays there while it waits between turns. A live agent outranks a newer
@@ -85,25 +88,17 @@ The tray app never opens a window and never takes focus, and only one copy can r
 
 ## Artwork
 
-Agent art must be **registered on the Discord application** to be rendered. An external image
-URL is accepted on the wire but Discord never displays it, and a loopback URL (`127.0.0.1`) is
-never even fetched — both were verified against a live client.
+Only the branch icon is left, and it needs no setup: without registered artwork the C# app falls
+back to a public favicon for that slot. To use your own image instead, register it on the Discord
+application (Rich Presence → Art Assets) under the key `git-branch`, then set:
 
-To use your own artwork:
+```sh
+setx ORCA_DISCORD_UPLOADED_ART "1"
+```
 
-1. Open the [Discord Developer Portal](https://discord.com/developers/applications), pick the
-   application whose id you use, and go to **Rich Presence → Art Assets**.
-2. Upload a PNG for each agent with a key matching its type: `claude`, `codex`, `opencode`,
-   `commandcode`, `deepsek-harnnes`, `grock`, `hermes`, `agy` — and `git-branch` for the branch
-   icon.
-3. Enable it:
-
-   ```sh
-   setx ORCA_DISCORD_UPLOADED_ART "1"
-   ```
-
-Without registered art the image slot stays empty and only the text shows. That is a Discord
-rule, not a setting this tool can work around.
+Discord renders only artwork registered on the application. An external image URL is accepted on
+the wire but never displayed, and a loopback URL (`127.0.0.1`) is never even fetched — both were
+verified against a live client. That is a Discord rule, not a setting this tool can work around.
 
 ## Configuration
 
@@ -174,8 +169,11 @@ orca worktree ps --json ──► parse ──► select the active worktree
                                             │
                       folder + open agents ──► dedup by payload
                                             │
-                              @xhayper/discord-rpc ──► Discord IPC socket
+                hand-rolled Discord IPC ──► the local named pipe
 ```
+
+The C# app speaks Discord's local protocol directly, so it carries no Discord library; the
+headless daemon uses `@xhayper/discord-rpc` for the same job.
 
 - **Input** is `orca worktree ps --json`, read on a timer. The tool takes the worktree Orca marks
   `isActive`, its folder from `path`, and its agent rows.
@@ -187,7 +185,8 @@ orca worktree ps --json ──► parse ──► select the active worktree
 - **Presence shows only while Orca is running.** Each tick probes for the Orca process and clears
   the activity when the app is closed, so nothing stale is left on the profile.
 - **Failures are quiet.** Discord not running, Orca mid-update, a rejected client id — the
-  process stays up and retries. Diagnostics go to `daemon.log` next to the config.
+  process stays up and retries. Diagnostics go to `tray.log` (C# app) or `daemon.log` (CLI), next
+  to the config.
 
 Nothing else is read: no session databases, no token counts, no usage statistics.
 
@@ -207,10 +206,18 @@ have their own floor, so ~40 MB is this approach's baseline rather than a tuning
 
 ## Development
 
-The display logic (`presence.ts`, `orca-state.ts`, `presence-controller.ts`) is pure, and every
-rule above — the `+N` line, the folder choice, `Working`/`Idle`, the dedup and retry behaviour —
-is covered by unit tests that need no live Discord client. The transport and tray layers take
-their side effects through injected dependencies, so they are covered too.
+Both implementations are covered by unit tests that need no live Discord client:
+
+- **C# app** — 79 tests via `dotnet test`. The state rules, the activity builder and the
+  controller are pure; the transport, the tray and the process probe take their effects through
+  injected dependencies, so they are covered too. It also carries development probes
+  (`--probe-orca`, `--probe-discord`, `--probe-parity`) that write to `probe.log`, because a
+  windowed app has no console to read.
+- **Headless daemon** — 125 tests via `npm test`. The display logic lives in pure modules
+  (`presence.ts`, `orca-state.ts`, `presence-controller.ts`).
+
+Every rule the README states — the `+N` line, the folder choice, `Working`/`Idle`, the dedup and
+the retry after a failure — is a test in both, because each one was a real bug first.
 
 ## License
 
