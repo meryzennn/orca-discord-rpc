@@ -29,6 +29,23 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
+        public void ParsesValidGitHubReleaseJsonWithAssets()
+        {
+            var json = @"{ 
+                ""tag_name"": ""v0.2.0"", 
+                ""html_url"": ""https://github.com/test/repo/releases/v0.2.0"",
+                ""assets"": [
+                    { ""name"": ""OrcaPresence-windows.zip"", ""browser_download_url"": ""https://github.com/test/repo/releases/download/v0.2.0/OrcaPresence-windows.zip"" }
+                ]
+            }";
+            var result = UpdateChecker.ParseRelease(json, "0.1.0");
+
+            Assert.True(result.HasUpdate);
+            Assert.Equal("v0.2.0", result.LatestVersion);
+            Assert.Equal("https://github.com/test/repo/releases/download/v0.2.0/OrcaPresence-windows.zip", result.DownloadUrl);
+        }
+
+        [Fact]
         public void IgnoresSameOrOlderVersionInJson()
         {
             var json = @"{ ""tag_name"": ""v0.1.0"", ""html_url"": ""https://github.com/test/repo/releases/v0.1.0"" }";

@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -11,6 +13,7 @@ namespace OrcaPresence
         public bool HasUpdate { get; set; }
         public string LatestVersion { get; set; } = "";
         public string Url { get; set; } = "";
+        public string? DownloadUrl { get; set; }
     }
 
     public static class UpdateChecker
@@ -49,11 +52,32 @@ namespace OrcaPresence
                 {
                     if (IsNewerVersion(currentVersion, release.TagName!))
                     {
+                        string? downloadUrl = null;
+                        if (release.Assets != null)
+                        {
+                            foreach (var a in release.Assets)
+                            {
+                                if (a != null && !string.IsNullOrEmpty(a.Name) &&
+                                    a.Name!.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.IsNullOrEmpty(a.BrowserDownloadUrl))
+                                {
+                                    downloadUrl = a.BrowserDownloadUrl;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(downloadUrl))
+                        {
+                            downloadUrl = RepoUrl + "/releases/download/" + release.TagName + "/OrcaPresence-windows.zip";
+                        }
+
                         return new UpdateInfo
                         {
                             HasUpdate = true,
                             LatestVersion = release.TagName!,
-                            Url = !string.IsNullOrEmpty(release.HtmlUrl) ? release.HtmlUrl! : RepoUrl + "/releases/latest"
+                            Url = !string.IsNullOrEmpty(release.HtmlUrl) ? release.HtmlUrl! : RepoUrl + "/releases/latest",
+                            DownloadUrl = downloadUrl
                         };
                     }
                 }
@@ -64,6 +88,72 @@ namespace OrcaPresence
             }
 
             return new UpdateInfo();
+        }
+
+        /// <summary>
+        /// Downloads the release zip and invokes a background PowerShell script to cleanly
+        /// unpack, replace files, and restart the executable after this process exits.
+        /// </summary>
+        public static async Task<bool> DownloadAndInstallUpdateAsync(UpdateInfo update, string targetExe)
+        {
+            if (string.IsNullOrEmpty(update.DownloadUrl))
+            {
+                return false;
+            }
+
+            var tempZip = Path.Combine(Path.GetTempPath(), "OrcaPresence-update.zip");
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add(HttpRequestHeader.UserAgent, "OrcaPresence/" + CurrentVersion);
+                    await client.DownloadFileTaskAsync(new Uri(update.DownloadUrl!), tempZip).ConfigureAwait(false);
+                }
+
+                if (!File.Exists(tempZip) || new FileInfo(tempZip).Length < 1000)
+                {
+                    return false;
+                }
+
+                var targetDir = Path.GetDirectoryName(targetExe);
+                if (string.IsNullOrEmpty(targetDir))
+                {
+                    return false;
+                }
+
+                // PowerShell command: wait for the old PID to release its lock, expand archive into destination, start new exe, and clean up temp zip.
+                var psArgs = "-NoProfile -WindowStyle Hidden -Command \"" +
+                    "Start-Sleep -Milliseconds 1200; " +
+                    "Expand-Archive -Force -LiteralPath '" + tempZip.Replace("'", "''") + "' -DestinationPath '" + targetDir.Replace("'", "''") + "'; " +
+                    "Start-Process -FilePath '" + targetExe.Replace("'", "''") + "'; " +
+                    "Remove-Item -LiteralPath '" + tempZip.Replace("'", "''") + "' -ErrorAction SilentlyContinue\"";
+
+                Process.Start(new ProcessStartInfo("powershell.exe", psArgs)
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                return true;
+            }
+            catch
+            {
+                try
+                {
+                    if (File.Exists(tempZip))
+                    {
+                        File.Delete(tempZip);
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                return false;
+            }
         }
 
         public static bool IsNewerVersion(string current, string latest)
@@ -96,6 +186,18 @@ namespace OrcaPresence
 
             [JsonPropertyName("html_url")]
             public string? HtmlUrl { get; set; }
+
+            [JsonPropertyName("assets")]
+            public GitHubAsset[]? Assets { get; set; }
+        }
+
+        private sealed class GitHubAsset
+        {
+            [JsonPropertyName("name")]
+            public string? Name { get; set; }
+
+            [JsonPropertyName("browser_download_url")]
+            public string? BrowserDownloadUrl { get; set; }
         }
     }
 }

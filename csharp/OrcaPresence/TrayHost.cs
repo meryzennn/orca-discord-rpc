@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -17,12 +18,17 @@ namespace OrcaPresence
         private readonly PresenceRuntime _runtime;
         private readonly NotifyIcon _icon;
         private readonly System.Threading.Timer _trimTimer;
+        private readonly System.Threading.Timer _updateTimer;
+        private readonly SynchronizationContext? _syncContext;
         private UpdateInfo? _availableUpdate;
         private bool _disposed;
+        private bool _updating;
 
         public TrayHost(AppConfig config)
         {
             _config = config;
+            _syncContext = SynchronizationContext.Current;
+
             _runtime = new PresenceRuntime(
                 clientId: config.ClientId,
                 pollMs: config.PollMs,
@@ -35,18 +41,21 @@ namespace OrcaPresence
                 Text = TrayStatus.AppDisplayName,
                 Visible = true
             };
-            _runtime.StatusChanged += status => Apply(status);
+            _runtime.StatusChanged += status => SafeApply(status);
 
             _icon.BalloonTipClicked += (_, __) =>
             {
                 if (_availableUpdate != null && _availableUpdate.HasUpdate)
                 {
-                    OpenUrl(_availableUpdate.Url);
+                    PerformAutoUpdate(_availableUpdate);
                 }
             };
 
-            // Why: drops RAM from ~40 MB to ~8 MB by releasing unneeded startup pages back to Windows.
+            // Why: drops RAM from ~40 MB to minimal working set by releasing unneeded pages.
             _trimTimer = new System.Threading.Timer(_ => MemoryTrimmer.Trim(), null, 10_000, 300_000);
+
+            // Why: checks for updates 5 seconds after startup, then repeats every 30 minutes in background.
+            _updateTimer = new System.Threading.Timer(_ => { var ignored = CheckUpdateAsync(); }, null, 5_000, 1800_000);
         }
 
         public void Start()
@@ -54,7 +63,7 @@ namespace OrcaPresence
             // Why not awaited: Application.Run below takes over the message loop, and the runtime
             // raises StatusChanged as it settles.
             var ignored = _runtime.StartAsync();
-            Apply(_runtime.Status);
+            SafeApply(_runtime.Status);
 
             try
             {
@@ -65,20 +74,27 @@ namespace OrcaPresence
             {
                 // ignore
             }
+        }
 
-            // Why: check for updates once in the background without delaying startup or adding CPU overhead.
-            Task.Run(async () =>
+        public async Task CheckUpdateAsync(bool notifyIfLatest = false)
+        {
+            var update = await UpdateChecker.CheckForUpdateAsync().ConfigureAwait(false);
+            if (_disposed)
             {
-                var update = await UpdateChecker.CheckForUpdateAsync().ConfigureAwait(false);
-                if (update.HasUpdate && !_disposed)
+                return;
+            }
+
+            if (update.HasUpdate)
+            {
+                _availableUpdate = update;
+                SafeInvoke(() =>
                 {
-                    _availableUpdate = update;
                     try
                     {
                         _icon.ShowBalloonTip(
                             5000,
                             "Update Available!",
-                            "Version " + update.LatestVersion + " is available. Click to download.",
+                            "Version " + update.LatestVersion + " is available. Click to auto-update.",
                             ToolTipIcon.Info);
                     }
                     catch
@@ -86,6 +102,76 @@ namespace OrcaPresence
                         // ignore
                     }
                     Apply(_runtime.Status);
+                });
+            }
+            else if (notifyIfLatest)
+            {
+                SafeInvoke(() =>
+                {
+                    try
+                    {
+                        _icon.ShowBalloonTip(
+                            3000,
+                            TrayStatus.AppDisplayName,
+                            "You are on the latest version (" + UpdateChecker.CurrentVersion + ").",
+                            ToolTipIcon.Info);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
+                });
+            }
+        }
+
+        private void PerformAutoUpdate(UpdateInfo update)
+        {
+            if (_updating)
+            {
+                return;
+            }
+
+            _updating = true;
+            try
+            {
+                _icon.ShowBalloonTip(
+                    5000,
+                    "Updating Orca Presence",
+                    "Downloading " + update.LatestVersion + "... The app will restart automatically.",
+                    ToolTipIcon.Info);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            Task.Run(async () =>
+            {
+                var currentExe = Autostart.CurrentExecutablePath();
+                var success = await UpdateChecker.DownloadAndInstallUpdateAsync(update, currentExe).ConfigureAwait(false);
+                if (success)
+                {
+                    SafeInvoke(() => Application.Exit());
+                }
+                else
+                {
+                    _updating = false;
+                    SafeInvoke(() =>
+                    {
+                        try
+                        {
+                            _icon.ShowBalloonTip(
+                                5000,
+                                "Update Notice",
+                                "Auto-update could not complete. Opening the release page in your browser.",
+                                ToolTipIcon.Warning);
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+                        OpenUrl(update.Url);
+                    });
                 }
             });
         }
@@ -99,9 +185,38 @@ namespace OrcaPresence
 
             _disposed = true;
             _trimTimer.Dispose();
+            _updateTimer.Dispose();
             _icon.Visible = false;
             _icon.Dispose();
             _runtime.Dispose();
+        }
+
+        private void SafeApply(RuntimeStatus status)
+        {
+            SafeInvoke(() => Apply(status));
+        }
+
+        private void SafeInvoke(Action action)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (_syncContext != null && SynchronizationContext.Current != _syncContext)
+            {
+                _syncContext.Post(_ =>
+                {
+                    if (!_disposed)
+                    {
+                        action();
+                    }
+                }, null);
+            }
+            else
+            {
+                action();
+            }
         }
 
         /// <summary>
@@ -171,14 +286,14 @@ namespace OrcaPresence
         {
             var menu = new ContextMenuStrip();
 
-            // Why: when an update is available, make it prominent at the top so the user can update in one click.
+            // Why: when an update is available, make it prominent at the top with a download icon.
             if (_availableUpdate != null && _availableUpdate.HasUpdate)
             {
                 var updateItem = new ToolStripMenuItem(
-                    "Update to " + _availableUpdate.LatestVersion + " (Click to download)",
-                    StarIcon);
+                    "Update to " + _availableUpdate.LatestVersion + " (Click to auto-update)",
+                    DownloadIcon);
                 updateItem.Font = new Font(menu.Font, FontStyle.Bold);
-                updateItem.Click += (_, __) => OpenUrl(_availableUpdate.Url);
+                updateItem.Click += (_, __) => PerformAutoUpdate(_availableUpdate);
                 menu.Items.Add(updateItem);
                 menu.Items.Add(new ToolStripSeparator());
             }
@@ -228,6 +343,14 @@ namespace OrcaPresence
             };
             menu.Items.Add(startWithWindows);
 
+            // Why: lets users check for updates manually if they want to.
+            if (_availableUpdate == null || !_availableUpdate.HasUpdate)
+            {
+                var checkItem = new ToolStripMenuItem("Check for updates...", DownloadIcon);
+                checkItem.Click += (_, __) => { var ignored = CheckUpdateAsync(notifyIfLatest: true); };
+                menu.Items.Add(checkItem);
+            }
+
             // Why: lets users easily find the project repo and star it.
             var starItem = new ToolStripMenuItem("Star on GitHub", StarIcon);
             starItem.Click += (_, __) => OpenUrl(UpdateChecker.RepoUrl);
@@ -258,6 +381,35 @@ namespace OrcaPresence
         }
 
         private static readonly Image StarIcon = CreateStarIcon();
+        private static readonly Image DownloadIcon = CreateDownloadIcon();
+
+        /// <summary>
+        /// Draws a crisp 16x16 download icon (down arrow + tray) in Discord Blurple.
+        /// </summary>
+        private static Image CreateDownloadIcon()
+        {
+            var bmp = new Bitmap(16, 16);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (var pen = new Pen(Color.FromArgb(88, 101, 242), 2f)) // Discord Blurple
+                {
+                    pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+
+                    // Vertical arrow stem
+                    g.DrawLine(pen, 8f, 2.5f, 8f, 9.5f);
+
+                    // Arrowhead
+                    g.DrawLine(pen, 4.5f, 6.5f, 8f, 10f);
+                    g.DrawLine(pen, 11.5f, 6.5f, 8f, 10f);
+
+                    // Tray base line
+                    g.DrawLine(pen, 3f, 13.5f, 13f, 13.5f);
+                }
+            }
+            return bmp;
+        }
 
         /// <summary>
         /// Draws a crisp 16x16 golden star icon for menu rows.
