@@ -23,27 +23,27 @@ Two ways to run it, sharing the same presence rules:
 - The C# app needs nothing else: it targets the .NET Framework that ships with Windows.
   The headless path needs **Node.js 24+**.
 
-## Install (Windows, C# app)
+## Install & Usage (Windows, C# app)
 
-Build or download `OrcaPresence.exe`, then install it into your own profile:
+`OrcaPresence` is a standalone, portable application:
+
+1. Download or build `OrcaPresence.exe` and place it in any folder you like.
+2. Double-click `OrcaPresence.exe` to run it. It appears directly in your system tray.
+3. Right-click the tray icon and check **Start with Windows** if you want it to run automatically on boot.
+
+To disable auto-start, simply uncheck **Start with Windows** in the tray menu (or delete the application folder).
+
+### Optional CLI commands
+
+You can also manage auto-start from the terminal:
 
 ```sh
-OrcaPresence.exe --install     # copies itself to %LOCALAPPDATA% and turns on start-at-login
-OrcaPresence.exe --status      # what is installed and what the autostart entry points at
-OrcaPresence.exe --uninstall   # removes both the copy and the entry
+OrcaPresence.exe autostart enable    # turns on start-at-login pointing to this exe
+OrcaPresence.exe autostart disable   # turns off start-at-login
+OrcaPresence.exe autostart status    # checks whether autostart is on and points to this exe
 ```
 
-Start-at-login can be changed on its own, without reinstalling — from the command line or from
-the tray menu's **Start with Windows** row:
-
-```sh
-OrcaPresence.exe autostart enable
-OrcaPresence.exe autostart disable
-OrcaPresence.exe autostart status
-```
-
-No installer, no administrator prompt: the copy lands in `%LOCALAPPDATA%\orca-discord-rpc\` and
-the entry goes under `HKEY_CURRENT_USER`, which the user already owns.
+No installer and no administrator prompt required: settings are kept in the user's `HKEY_CURRENT_USER` registry hive.
 
 > Only one copy may run. A second launch exits immediately, so two presences can never fight over
 > the profile.
@@ -51,9 +51,8 @@ the entry goes under `HKEY_CURRENT_USER`, which the user already owns.
 ## Build the C# app
 
 ```sh
-node config/scripts/build-ico.mjs                      # build/app.ico from orca-rpc.png
-dotnet publish csharp/OrcaPresence -c Release -o dist-csharp
-dotnet test csharp/OrcaPresence.Tests                  # 79 tests
+npm run build:csharp                    # generates icons and publishes to dist-csharp
+dotnet test csharp/OrcaPresence.Tests   # 89 tests
 ```
 
 

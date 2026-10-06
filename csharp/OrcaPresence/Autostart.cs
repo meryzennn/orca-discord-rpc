@@ -103,7 +103,7 @@ namespace OrcaPresence
 
         public void Toggle(string executablePath)
         {
-            if (IsEnabled)
+            if (PointsAt(executablePath))
             {
                 Disable();
             }
@@ -114,10 +114,7 @@ namespace OrcaPresence
         }
 
         /// <summary>
-        /// Accepts both `autostart disable` and a bare `disable`.
-        ///
-        /// Why both: the documented form is two words, and a parser that only read the first word
-        /// silently did nothing — the registry kept its entry while the command reported success.
+        /// Accepts `autostart [enable|disable|status]`, `--install`, `--uninstall`, `--status`, etc.
         /// </summary>
         public static AutostartCommand Parse(string[] args)
         {
@@ -130,11 +127,36 @@ namespace OrcaPresence
 
             switch (word)
             {
-                case "enable": return AutostartCommand.Enable;
-                case "disable": return AutostartCommand.Disable;
-                case "status": return AutostartCommand.Status;
-                default: return AutostartCommand.None;
+                case "enable":
+                case "--enable":
+                case "install":
+                case "--install":
+                    return AutostartCommand.Enable;
+
+                case "disable":
+                case "--disable":
+                case "uninstall":
+                case "--uninstall":
+                    return AutostartCommand.Disable;
+
+                case "status":
+                case "--status":
+                    return AutostartCommand.Status;
+
+                default:
+                    return AutostartCommand.None;
             }
+        }
+
+        /// <summary>Returns the full path to the currently running executable.</summary>
+        public static string CurrentExecutablePath()
+        {
+            var main = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(main))
+            {
+                return main!;
+            }
+            return System.Reflection.Assembly.GetExecutingAssembly().Location;
         }
     }
 }

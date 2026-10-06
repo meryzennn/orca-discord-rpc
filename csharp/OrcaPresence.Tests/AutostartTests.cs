@@ -153,6 +153,29 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
+        public void ParsesInstallAndUninstallFlags()
+        {
+            Assert.Equal(AutostartCommand.Enable, Autostart.Parse(new[] { "--install" }));
+            Assert.Equal(AutostartCommand.Enable, Autostart.Parse(new[] { "install" }));
+            Assert.Equal(AutostartCommand.Disable, Autostart.Parse(new[] { "--uninstall" }));
+            Assert.Equal(AutostartCommand.Disable, Autostart.Parse(new[] { "uninstall" }));
+            Assert.Equal(AutostartCommand.Status, Autostart.Parse(new[] { "--status" }));
+        }
+
+        [Fact]
+        public void TogglingWhenPointingAtADifferentPathRePointsToGivenPath()
+        {
+            var store = new FakeStore();
+            var autostart = new Autostart(store);
+            autostart.Enable(@"C:\old\OrcaPresence.exe");
+
+            autostart.Toggle(@"C:\new\OrcaPresence.exe");
+
+            Assert.True(autostart.PointsAt(@"C:\new\OrcaPresence.exe"));
+            Assert.False(autostart.PointsAt(@"C:\old\OrcaPresence.exe"));
+        }
+
+        [Fact]
         public void EnablingAnAlreadyEnabledEntryDoesNotRewriteIt()
         {
             var store = new FakeStore();

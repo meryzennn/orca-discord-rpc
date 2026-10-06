@@ -151,16 +151,17 @@ namespace OrcaPresence
             menu.Items.Add(new ToolStripMenuItem("Application id: " + _config.ClientId) { Enabled = false });
 
             // Why a checkable row: turning the login start on and off is the one setting a user
-            // changes after install, and it should not need the command line.
+            // changes, and it should not need the command line.
             var autostart = new Autostart();
+            var currentExe = Autostart.CurrentExecutablePath();
             var startWithWindows = new ToolStripMenuItem("Start with Windows")
             {
-                Checked = autostart.IsEnabled,
+                Checked = autostart.PointsAt(currentExe),
                 CheckOnClick = false
             };
             startWithWindows.Click += (_, __) =>
             {
-                autostart.Toggle(SelfInstall.InstallTargetPath());
+                autostart.Toggle(currentExe);
                 // Why rebuilt rather than toggled in place: the menu is rebuilt from state anyway.
                 Apply(_runtime.Status);
             };

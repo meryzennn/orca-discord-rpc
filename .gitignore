@@ -21,3 +21,4 @@ csharp-state.txt
 probe.log
 tray.log
 daemon.log
+*.zip

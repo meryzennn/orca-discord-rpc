@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -10,6 +11,10 @@ namespace OrcaPresence
 {
     internal static class Program
     {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AttachConsole(int dwProcessId);
+        private const int AttachParentProcess = -1;
+
         /// <summary>
         /// Why a global mutex: two copies would run two presences fighting over the profile, which
         /// shows up as the activity flickering between two states.
@@ -19,12 +24,24 @@ namespace OrcaPresence
         [STAThread]
         private static int Main(string[] args)
         {
-            if (args.Length > 0 && SelfInstall.IsInstallCommand(args))
+            if (args.Length > 0)
             {
-                return SelfInstall.Run(args);
+                AttachConsole(AttachParentProcess);
+                try
+                {
+                    var stdout = Console.OpenStandardOutput();
+                    if (stdout != Stream.Null)
+                    {
+                        Console.SetOut(new StreamWriter(stdout, Encoding.UTF8) { AutoFlush = true });
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
             }
 
-            // Why its own command: turning the login start on and off must not need a reinstall.
+            // Why its own command: turning the login start on and off or checking status from CLI.
             if (args.Length > 0 && Autostart.Parse(args) != AutostartCommand.None)
             {
                 return RunAutostartCommand(args);
@@ -67,16 +84,12 @@ namespace OrcaPresence
         }
 
         /// <summary>
-        /// Turns the login start on or off. Targets the installed copy when there is one, so
-        /// running this from a build folder does not register the build folder.
+        /// Turns the login start on or off or prints status. Targets the current executable.
         /// </summary>
         private static int RunAutostartCommand(string[] args)
         {
             var autostart = new Autostart();
-            var installed = SelfInstall.InstallTargetPath();
-            var target = System.IO.File.Exists(installed)
-                ? installed
-                : System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
+            var target = Autostart.CurrentExecutablePath();
 
             switch (Autostart.Parse(args))
             {
@@ -91,8 +104,11 @@ namespace OrcaPresence
                     Console.WriteLine("start with Windows: off");
                     return 0;
 
+                case AutostartCommand.Status:
                 default:
+                    Console.WriteLine("this exe: " + target);
                     Console.WriteLine("start with Windows: " + (autostart.Value ?? "(off)"));
+                    Console.WriteLine("points at this exe: " + autostart.PointsAt(target));
                     return 0;
             }
         }

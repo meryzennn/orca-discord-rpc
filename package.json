@@ -20,7 +20,8 @@
     "status": "node src/cli.ts status",
     "test": "node --test \"src/*.test.ts\" \"config/scripts/*.test.mjs\"",
     "typecheck": "tsc --noEmit",
-    "icons": "node config/scripts/build-ico.mjs"
+    "icons": "node config/scripts/build-ico.mjs",
+    "build:csharp": "node config/scripts/build-ico.mjs && dotnet publish csharp/OrcaPresence -c Release -o dist-csharp"
   },
   "dependencies": {
     "@xhayper/discord-rpc": "^1.5.1"
