@@ -174,7 +174,9 @@ namespace OrcaPresence
             // Why: when an update is available, make it prominent at the top so the user can update in one click.
             if (_availableUpdate != null && _availableUpdate.HasUpdate)
             {
-                var updateItem = new ToolStripMenuItem("⭐ Update to " + _availableUpdate.LatestVersion + " (Click to download)");
+                var updateItem = new ToolStripMenuItem(
+                    "Update to " + _availableUpdate.LatestVersion + " (Click to download)",
+                    StarIcon);
                 updateItem.Font = new Font(menu.Font, FontStyle.Bold);
                 updateItem.Click += (_, __) => OpenUrl(_availableUpdate.Url);
                 menu.Items.Add(updateItem);
@@ -227,7 +229,7 @@ namespace OrcaPresence
             menu.Items.Add(startWithWindows);
 
             // Why: lets users easily find the project repo and star it.
-            var starItem = new ToolStripMenuItem("⭐ Star on GitHub");
+            var starItem = new ToolStripMenuItem("Star on GitHub", StarIcon);
             starItem.Click += (_, __) => OpenUrl(UpdateChecker.RepoUrl);
             menu.Items.Add(starItem);
 
@@ -253,6 +255,42 @@ namespace OrcaPresence
             {
                 // ignore
             }
+        }
+
+        private static readonly Image StarIcon = CreateStarIcon();
+
+        /// <summary>
+        /// Draws a crisp 16x16 golden star icon for menu rows.
+        /// WinForms text renderer renders Unicode emojis in monochrome/black-and-white, so a custom
+        /// rendered 16x16 icon displays a full-color golden star.
+        /// </summary>
+        private static Image CreateStarIcon()
+        {
+            var bmp = new Bitmap(16, 16);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                var points = new PointF[10];
+                var center = new PointF(8f, 8f);
+                var rOuter = 6.5f;
+                var rInner = 2.8f;
+                for (int i = 0; i < 10; i++)
+                {
+                    var r = (i % 2 == 0) ? rOuter : rInner;
+                    var angle = (float)(i * Math.PI / 5 - Math.PI / 2);
+                    points[i] = new PointF(
+                        center.X + r * (float)Math.Cos(angle),
+                        center.Y + r * (float)Math.Sin(angle));
+                }
+
+                using (var fillBrush = new SolidBrush(Color.FromArgb(255, 215, 0))) // Gold
+                using (var pen = new Pen(Color.FromArgb(218, 165, 32), 1f)) // Goldenrod outline
+                {
+                    g.FillPolygon(fillBrush, points);
+                    g.DrawPolygon(pen, points);
+                }
+            }
+            return bmp;
         }
     }
 }
