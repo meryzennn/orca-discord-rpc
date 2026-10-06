@@ -6,7 +6,7 @@
   "description": "Discord Rich Presence for Orca — reflects the active worktree and running agent.",
   "license": "MIT",
   "author": {
-    "name": "masarezenn"
+    "name": "meryzennn"
   },
   "engines": {
     "node": ">=24"
