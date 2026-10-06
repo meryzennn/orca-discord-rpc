@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Xunit;
 
 namespace OrcaPresence.Tests
@@ -42,6 +43,41 @@ namespace OrcaPresence.Tests
         {
             Assert.True(SelfInstall.IsInstallCommand(new[] { "--install" }));
             Assert.False(SelfInstall.IsInstallCommand(new[] { "--probe-discord" }));
+        }
+
+        [Fact]
+        public void CopiesEveryFileTheAppNeedsToRun()
+        {
+            // Why pinned: copying only the exe produced an install that threw
+            // FileNotFoundException on System.Text.Json at startup, so it could never run.
+            var directory = Path.Combine(Path.GetTempPath(), "orca-install-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                File.WriteAllText(Path.Combine(directory, "OrcaPresence.exe"), "exe");
+                File.WriteAllText(Path.Combine(directory, "System.Text.Json.dll"), "dll");
+                File.WriteAllText(Path.Combine(directory, "OrcaPresence.pdb"), "symbols");
+
+                var files = SelfInstall.FilesToCopy(directory);
+
+                Assert.Contains("OrcaPresence.exe", files);
+                Assert.Contains("System.Text.Json.dll", files);
+                // A symbol file is not needed to run.
+                Assert.DoesNotContain("OrcaPresence.pdb", files);
+            }
+            finally
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void InstallsBesideItsDependencies()
+        {
+            // The dependency assemblies must land in the same directory as the exe.
+            Assert.Equal(
+                Path.GetDirectoryName(SelfInstall.InstallTargetPath()),
+                SelfInstall.InstallTargetDirectory());
         }
     }
 }

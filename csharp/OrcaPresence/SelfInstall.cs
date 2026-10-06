@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -55,6 +56,34 @@ namespace OrcaPresence
             return Path.Combine(local, InstallDirectoryName, InstalledExeName);
         }
 
+        /// <summary>The directory the install owns; the exe needs its dependency DLLs beside it.</summary>
+        public static string InstallTargetDirectory() => Path.GetDirectoryName(InstallTargetPath())!;
+
+        /// <summary>
+        /// Every file the published app needs: the exe plus its dependency assemblies.
+        ///
+        /// Why the whole set and not just the exe: copying the exe alone produced an install that
+        /// threw FileNotFoundException on System.Text.Json at startup, so it could never run.
+        /// </summary>
+        public static IReadOnlyList<string> FilesToCopy(string sourceDirectory)
+        {
+            var files = new List<string>();
+            foreach (var path in Directory.GetFiles(sourceDirectory))
+            {
+                var name = Path.GetFileName(path);
+                // Why skipped: a symbol file is not needed to run, and a config is per-machine.
+                if (name.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                files.Add(name);
+            }
+
+            files.Sort(StringComparer.OrdinalIgnoreCase);
+            return files;
+        }
+
         public static int Run(string[] args)
         {
             switch (Parse(args))
@@ -73,24 +102,32 @@ namespace OrcaPresence
         private static int Install()
         {
             var source = ExecutablePath();
+            var sourceDirectory = Path.GetDirectoryName(source)!;
             var target = InstallTargetPath();
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            var targetDirectory = InstallTargetDirectory();
+            Directory.CreateDirectory(targetDirectory);
 
-            // Why a copy: the exe the user downloaded may be in Downloads, which they will clean.
-            if (!string.Equals(source, target, StringComparison.OrdinalIgnoreCase))
+            var copied = 0;
+            if (!string.Equals(sourceDirectory.TrimEnd('\\'), targetDirectory.TrimEnd('\\'),
+                    StringComparison.OrdinalIgnoreCase))
             {
-                File.Copy(source, target, overwrite: true);
+                foreach (var name in FilesToCopy(sourceDirectory))
+                {
+                    File.Copy(Path.Combine(sourceDirectory, name), Path.Combine(targetDirectory, name), overwrite: true);
+                    copied++;
+                }
             }
 
             Microsoft.Win32.Registry.SetValue(AutostartKeyPath, RunValueName, "\"" + target + "\"");
             Console.WriteLine("installed to " + target);
+            Console.WriteLine("files copied: " + copied);
             Console.WriteLine("autostart entry: " + AutostartKeyPath + "\\" + RunValueName);
             return 0;
         }
 
         private static int Uninstall()
         {
-            var target = InstallTargetPath();
+            var targetDirectory = InstallTargetDirectory();
 
             // Why deleted first: a removed autostart entry with a lingering binary is harmless, but
             // a lingering binary that still starts on login is not.
@@ -102,15 +139,17 @@ namespace OrcaPresence
                 }
             }
 
-            if (IsRunningFromInstall() && File.Exists(target))
+            if (IsRunningFromInstall())
             {
                 Console.WriteLine("run this from the published exe, not the installed copy, to remove it");
                 return 1;
             }
 
-            if (File.Exists(target))
+            if (Directory.Exists(targetDirectory))
             {
-                File.Delete(target);
+                // Why the directory and not just the exe: the dependency assemblies live here too,
+                // and leaving them behind would strand a broken half-install.
+                Directory.Delete(targetDirectory, recursive: true);
             }
 
             Console.WriteLine("uninstalled");
@@ -123,6 +162,8 @@ namespace OrcaPresence
             var target = InstallTargetPath();
             Console.WriteLine("autostart: " + (entry ?? "(not set)"));
             Console.WriteLine("installed copy: " + (File.Exists(target) ? target : "(missing)"));
+            var directory = InstallTargetDirectory();
+            Console.WriteLine("files installed: " + (Directory.Exists(directory) ? Directory.GetFiles(directory).Length : 0));
             Console.WriteLine("this exe: " + ExecutablePath());
             return 0;
         }
