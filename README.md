@@ -9,26 +9,44 @@ orca-discord-rpc · Working
 0:42 elapsed
 ```
 
-Two ways to run it, sharing the same presence logic:
+Two ways to run it, sharing the same presence rules:
 
-- **Tray app (Windows)** — install once, lives in the notification area, no Node needed.
-- **Headless daemon** — `node src/cli.ts start`, for a checkout or a non-Windows host.
+- **C# tray app (Windows)** — a single small exe, no runtime to install, ~40 MB of RAM.
+- **Headless Node daemon** — `node src/cli.ts start`, for a checkout, a scripted setup, or a
+  non-Windows host.
 
 ## Requirements
 
 - **Orca installed**, with the `orca` CLI resolvable on `PATH`
 - **Discord desktop client running and logged in** — browser Discord does not expose the local
   IPC socket this depends on
-- The tray installer bundles everything else. Only the headless path needs **Node.js 24+**
+- The C# app needs nothing else: it targets the .NET Framework that ships with Windows.
+  The headless path needs **Node.js 24+**.
 
-## Install (Windows)
+## Install (Windows, C# app)
 
-Download `Orca Discord Presence Setup <version>.exe` from
-[`dist-installer/`](dist-installer) and run it. It installs per user — no admin prompt — adds a
-Start Menu shortcut, and puts an icon in the notification area.
+Build or download `OrcaPresence.exe`, then install it into your own profile:
 
-> Unsigned builds trip Windows SmartScreen on first run: **More info** → **Run anyway**.
-> Signing needs a purchased certificate; this build is not signed.
+```sh
+OrcaPresence.exe --install     # copies itself to %LOCALAPPDATA% and sets it to run at login
+OrcaPresence.exe --status      # what is installed and what the autostart entry points at
+OrcaPresence.exe --uninstall   # removes both
+```
+
+No installer, no administrator prompt: the copy lands in `%LOCALAPPDATA%\orca-discord-rpc\` and
+the autostart entry goes under `HKEY_CURRENT_USER`, which the user already owns.
+
+> Only one copy may run. A second launch exits immediately, so two presences can never fight over
+> the profile.
+
+## Build the C# app
+
+```sh
+node config/scripts/build-ico.mjs                      # build/app.ico from orca-rpc.png
+dotnet publish csharp/OrcaPresence -c Release -o dist-csharp
+dotnet test csharp/OrcaPresence.Tests                  # 79 tests
+```
+
 
 ## What Discord shows
 
@@ -109,28 +127,23 @@ setx ORCA_DISCORD_CLIENT_ID "123456789012345678"
 `pollMs` is clamped to at least 5 seconds. The default 15 s stays inside Discord's rate limit of
 roughly 5 updates per 20 seconds.
 
-## Run from source
+## Run the headless daemon
 
-For development, or on macOS and Linux where no installer is published:
+For a scripted setup, a checkout, or macOS and Linux:
 
 ```sh
 npm install
-node node_modules/electron/install.js   # see the note below
-npm start          # headless daemon, logs to daemon.log
-npm run dev:app    # Electron tray app, built from source
-npm test           # 140+ tests, node --test with no test framework
+npm start          # starts the daemon, logging to daemon.log
+npm test           # node --test, no test framework
 npm run typecheck
 ```
 
-> **If the tray app fails to launch**, Electron's binary may not have downloaded: `npm install`
-> can report success while leaving `node_modules/electron/dist/` missing. Run
-> `node node_modules/electron/install.js` to fetch it, then retry.
-
-### Building the installer
+### Building the C# app
 
 ```sh
-npm run icons      # regenerate assets/tray.png and build/icon.png from orca-rpc.png
-npm run build:win  # writes dist-installer/Orca Discord Presence Setup <version>.exe
+node config/scripts/build-ico.mjs   # regenerates build/app.ico from orca-rpc.png
+dotnet publish csharp/OrcaPresence -c Release -o dist-csharp
+dotnet test csharp/OrcaPresence.Tests
 ```
 
 ### Headless CLI
@@ -180,12 +193,17 @@ Nothing else is read: no session databases, no token counts, no usage statistics
 
 ## Size
 
-The Windows installer is about **106 MB**, and almost none of it is this tool: Electron's own
-runtime accounts for 235 MB of the 373 MB unpacked, with `locales/` adding 49 MB. The application
-code is roughly 5 MB inside that.
+The C# app is small because it borrows the framework Windows already has instead of shipping a
+browser:
 
-That is the cost of shipping an installer that needs no runtime on the user's machine. A
-headless-only install (Node 24 already present) avoids it entirely.
+| | C# app | Electron app (retired) |
+| --- | --- | --- |
+| Published size | **1.7 MB** (exe 578 KB) | 106 MB installer |
+| Memory | **~40 MB** | 224 MB |
+| Processes | 1 | 3 |
+
+The memory figure is the smaller win. A native app would sit near 5 MB, but the CLR and WinForms
+have their own floor, so ~40 MB is this approach's baseline rather than a tuning target.
 
 ## Development
 

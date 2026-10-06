@@ -13,3 +13,6 @@ tmp-build/
 tmp-build2/
 .commandcode/
 docs/superpowers/
+csharp/**/bin/
+csharp/**/obj/
+dist-csharp/
