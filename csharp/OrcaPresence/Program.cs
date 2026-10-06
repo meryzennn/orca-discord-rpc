@@ -1,94 +1,48 @@
 using System;
-using System.IO;
-using System.Text;
+using System.Threading;
+using System.Windows.Forms;
 
 namespace OrcaPresence
 {
     internal static class Program
     {
+        /// <summary>
+        /// Why a global mutex: two copies would run two presences fighting over the profile, which
+        /// shows up as the activity flickering between two states.
+        /// </summary>
+        private const string SingleInstanceName = "Global\\OrcaDiscordPresence";
+
         [STAThread]
-        private static void Main(string[] args)
+        private static int Main(string[] args)
         {
-            // Why: a debugging probe so the payload can be compared against the TypeScript app.
-            // Why guarded: a WinExe has no console when launched without one, and setting the
-            // encoding then throws.
-            try { Console.OutputEncoding = Encoding.UTF8; } catch (IOException) { }
-
-            // Why: a one-shot check that the Orca probe and reader work on this machine.
-            if (args.Length == 1 && args[0] == "--probe-orca")
+            // Why: a tray app has no console, so anything that needs to be seen goes to a file.
+            if (args.Length > 0 && SelfInstall.IsInstallCommand(args))
             {
-                Console.WriteLine("orcaRunning: " + OrcaProcess.IsOrcaRunning());
-                var state = OrcaReader.ReadPresenceState();
-                if (state == null)
-                {
-                    Console.WriteLine("state      : (none)");
-                }
-                else
-                {
-                    Console.WriteLine("state      : " + state.ProjectName + " | agent=" + state.AgentType +
-                                      " | count=" + state.OpenAgentCount + " | active=" + state.AgentActive +
-                                      " | branch=" + state.BranchName);
-                }
-
-                return;
+                return SelfInstall.Run(args);
             }
 
-            if (args.Length == 2 && args[0] == "--parse")
+            using (var mutex = new Mutex(initiallyOwned: true, name: SingleInstanceName, createdNew: out var isFirst))
             {
-                var json = File.ReadAllText(args[1]);
-                var worktrees = OrcaState.ParseWorktreePs(json);
-                var active = OrcaState.SelectActiveWorktree(worktrees);
-                var featured = OrcaState.FeaturedAgent(active);
-                var activity = Presence.BuildActivity(new PresenceInput
+                if (!isFirst)
                 {
-                    ProjectName = OrcaState.ProjectNameFor(active),
-                    AgentType = featured?.AgentType,
-                    OpenAgentCount = OrcaState.OpenAgentCount(active),
-                    AgentActive = OrcaState.HasActiveAgent(active),
-                    BranchName = OrcaState.BranchNameFor(active),
-                    StartedAt = DateTime.UtcNow,
-                    UseUploadedArt = false
-                });
+                    // Why: the newest launch exits rather than running a second presence.
+                    return 0;
+                }
 
-                Console.WriteLine("worktrees      : " + worktrees.Length);
-                Console.WriteLine("projectName    : " + (OrcaState.ProjectNameFor(active) ?? "(null)"));
-                Console.WriteLine("branchName     : " + (OrcaState.BranchNameFor(active) ?? "(null)"));
-                Console.WriteLine("featuredAgent  : " + (featured?.AgentType ?? "(null)"));
-                Console.WriteLine("openAgentCount : " + OrcaState.OpenAgentCount(active));
-                Console.WriteLine("agentActive    : " + OrcaState.HasActiveAgent(active));
-                Console.WriteLine("--- payload ---");
-                Console.WriteLine("details        : " + activity.Details);
-                Console.WriteLine("state          : " + activity.State);
-                Console.WriteLine("smallImageText : " + activity.SmallImageText);
-                return;
-            }
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
 
-            // Why: a one-shot check that the hand-rolled IPC works against a live client.
-            if (args.Length == 1 && args[0] == "--probe-discord")
-            {
                 var config = AppConfig.Load();
-                using (var presence = new DiscordPresence(config.ClientId))
+                using (var host = new TrayHost(config))
                 {
-                    var activity = new PresenceActivity
-                    {
-                        Details = "C# probe",
-                        State = "orca-discord-rpc - Working",
-                        StartTimestamp = DateTime.UtcNow,
-                        LargeImageKey = "orca",
-                        LargeImageText = "Orca",
-                        SmallImageText = "Branch"
-                    };
-                    Console.WriteLine("apply  : " + presence.Apply(activity));
-                    Console.WriteLine("connected: " + presence.IsConnected);
-                    System.Threading.Thread.Sleep(1500);
-                    Console.WriteLine("clear  : " + presence.Clear());
-                    Console.WriteLine("generation: " + presence.ConnectionGeneration);
+                    host.Start();
+                    // Why an ApplicationContext and not a Form: the tray icon is the only UI, so no
+                    // window exists and the app can never take focus.
+                    Application.Run(new ApplicationContext());
                 }
 
-                return;
+                return 0;
             }
-
-            Console.WriteLine("OrcaPresence placeholder");
         }
     }
 }

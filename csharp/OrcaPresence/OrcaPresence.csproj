@@ -7,7 +7,13 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>OrcaPresence</AssemblyName>
     <RootNamespace>OrcaPresence</RootNamespace>
+    <!-- Why: the exe icon comes from the .ico generated out of orca-rpc.png. -->
+    <ApplicationIcon>../../build/app.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Why embedded: the shipped exe must carry its tray icon itself, with no loose files. -->
+    <EmbeddedResource Include="../../build/app.ico" LogicalName="OrcaPresence.app.ico" />
+  </ItemGroup>
   <ItemGroup>
     <!-- Why net48: the in-box framework, so no runtime install is needed on the user's machine. -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
