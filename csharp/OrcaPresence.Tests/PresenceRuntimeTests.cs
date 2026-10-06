@@ -146,5 +146,23 @@ namespace OrcaPresence.Tests
             await Build(f).StartAsync();
             Assert.True(f.Logs.Exists(l => l.Contains("pushed") && l.Contains("Claude")));
         }
+
+        [Fact]
+        public async Task LogsThePauseAndResumeSoTheBlankProfileCaseIsDiagnosable()
+        {
+            // Why pinned: pause-then-resume once pushed nothing and the profile stayed blank while
+            // the menu claimed otherwise, and only the log made that visible.
+            var f = new Fake();
+            var runtime = Build(f);
+            await runtime.StartAsync();
+            await runtime.PauseAsync();
+            await runtime.StartAsync();
+
+            Assert.True(f.Logs.Exists(l => l.Contains("paused")), "expected a pause line");
+            Assert.True(f.Logs.Exists(l => l.Contains("resuming")), "expected a resume line");
+            // Two pushes: the start and the resume, with the clear in between.
+            Assert.Equal(2, f.Applied.Count);
+            Assert.Equal(1, f.Cleared);
+        }
     }
 }

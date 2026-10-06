@@ -117,6 +117,11 @@ namespace OrcaPresence
         public async Task StartAsync()
         {
             var resuming = _paused || !_started;
+            if (_paused)
+            {
+                _log("resuming; the cleared activity will be pushed again");
+            }
+
             _started = true;
             _paused = false;
 
@@ -141,6 +146,7 @@ namespace OrcaPresence
             try
             {
                 await _deps.Clear();
+                _log("paused; activity cleared");
             }
             catch
             {
