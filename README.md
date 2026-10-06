@@ -11,7 +11,7 @@ orca-discord-rpc · Working
 
 Two ways to run it, sharing the same presence rules:
 
-- **C# tray app (Windows)** — a single small exe, no runtime to install, ~40 MB of RAM.
+- **C# tray app (Windows)** — a single small exe, no runtime to install, ~2–8 MB of RAM (with working-set auto-trimming).
 - **Headless Node daemon** — `node src/cli.ts start`, for a checkout, a scripted setup, or a
   non-Windows host.
 
