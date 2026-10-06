@@ -43,6 +43,31 @@ namespace OrcaPresence
                 return;
             }
 
+            // Why: a one-shot check that the hand-rolled IPC works against a live client.
+            if (args.Length == 1 && args[0] == "--probe-discord")
+            {
+                var config = AppConfig.Load();
+                using (var presence = new DiscordPresence(config.ClientId))
+                {
+                    var activity = new PresenceActivity
+                    {
+                        Details = "C# probe",
+                        State = "orca-discord-rpc - Working",
+                        StartTimestamp = DateTime.UtcNow,
+                        LargeImageKey = "orca",
+                        LargeImageText = "Orca",
+                        SmallImageText = "Branch"
+                    };
+                    Console.WriteLine("apply  : " + presence.Apply(activity));
+                    Console.WriteLine("connected: " + presence.IsConnected);
+                    System.Threading.Thread.Sleep(1500);
+                    Console.WriteLine("clear  : " + presence.Clear());
+                    Console.WriteLine("generation: " + presence.ConnectionGeneration);
+                }
+
+                return;
+            }
+
             Console.WriteLine("OrcaPresence placeholder");
         }
     }
