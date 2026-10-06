@@ -13,6 +13,26 @@ namespace OrcaPresence
             // Why guarded: a WinExe has no console when launched without one, and setting the
             // encoding then throws.
             try { Console.OutputEncoding = Encoding.UTF8; } catch (IOException) { }
+
+            // Why: a one-shot check that the Orca probe and reader work on this machine.
+            if (args.Length == 1 && args[0] == "--probe-orca")
+            {
+                Console.WriteLine("orcaRunning: " + OrcaProcess.IsOrcaRunning());
+                var state = OrcaReader.ReadPresenceState();
+                if (state == null)
+                {
+                    Console.WriteLine("state      : (none)");
+                }
+                else
+                {
+                    Console.WriteLine("state      : " + state.ProjectName + " | agent=" + state.AgentType +
+                                      " | count=" + state.OpenAgentCount + " | active=" + state.AgentActive +
+                                      " | branch=" + state.BranchName);
+                }
+
+                return;
+            }
+
             if (args.Length == 2 && args[0] == "--parse")
             {
                 var json = File.ReadAllText(args[1]);
