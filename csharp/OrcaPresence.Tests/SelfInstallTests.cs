@@ -79,5 +79,39 @@ namespace OrcaPresence.Tests
                 Path.GetDirectoryName(SelfInstall.InstallTargetPath()),
                 SelfInstall.InstallTargetDirectory());
         }
+
+        [Fact]
+        public void ReportsStalenessByComparingWriteTimes()
+        {
+            // Why pinned: an install that was never refreshed kept running the old build at login
+            // while a manual launch used the new one, so a feature existed in one copy only.
+            var directory = Path.Combine(Path.GetTempPath(), "orca-stale-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                var source = Path.Combine(directory, "source.exe");
+                var installed = Path.Combine(directory, "installed.exe");
+                File.WriteAllText(source, "new");
+                File.WriteAllText(installed, "old");
+
+                File.SetLastWriteTimeUtc(installed, DateTime.UtcNow.AddMinutes(-5));
+                Assert.True(SelfInstall.IsInstalledCopyStale(source, installed));
+
+                File.SetLastWriteTimeUtc(installed, DateTime.UtcNow.AddMinutes(5));
+                Assert.False(SelfInstall.IsInstalledCopyStale(source, installed));
+            }
+            finally
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void AMissingInstallCountsAsStale()
+        {
+            // Nothing installed means there is certainly nothing current.
+            var missing = Path.Combine(Path.GetTempPath(), "orca-missing-" + Guid.NewGuid().ToString("N") + ".exe");
+            Assert.True(SelfInstall.IsInstalledCopyStale(@"C:\does\not\exist\OrcaPresence.exe", missing));
+        }
     }
 }

@@ -77,6 +77,28 @@ namespace OrcaPresence
             return files;
         }
 
+        /// <summary>
+        /// Whether the installed copy is older than the exe asking to install.
+        ///
+        /// Why this matters: an install only refreshed when it was run again, so a user who had
+        /// installed once kept running the old build at every login while their manual launches
+        /// used the new one — which showed up as a menu row existing in one copy and not the other.
+        /// </summary>
+        public static bool IsInstalledCopyStale(string sourceExecutablePath, string? installedPath = null)
+        {
+            var target = installedPath ?? InstallTargetPath();
+            if (!File.Exists(target))
+            {
+                return true;
+            }
+
+            var source = File.GetLastWriteTimeUtc(sourceExecutablePath);
+            var installed = File.GetLastWriteTimeUtc(target);
+            // Why a second of slack: a copy written in the same operation can land marginally
+            // older than its source, and that must not read as stale forever.
+            return source > installed.AddSeconds(1);
+        }
+
         public static int Run(string[] args)
         {
             switch (Parse(args))
@@ -121,6 +143,14 @@ namespace OrcaPresence
             Console.WriteLine("installed to " + target);
             Console.WriteLine("files copied: " + copied);
             Console.WriteLine("start with Windows: " + (autostart.IsEnabled ? "on" : "off"));
+
+            // Why said out loud: an install that silently left an older copy running is exactly the
+            // confusion this check exists to prevent.
+            if (copied > 0)
+            {
+                Console.WriteLine("note: quit the running tray app, or sign out and back in, so the new copy starts");
+            }
+
             return 0;
         }
 
@@ -161,8 +191,16 @@ namespace OrcaPresence
             Console.WriteLine("files installed: " +
                               (Directory.Exists(directory) ? Directory.GetFiles(directory).Length : 0));
             Console.WriteLine("this exe: " + ExecutablePath());
+            if (IsRunningAheadOfInstall())
+            {
+                Console.WriteLine("installed copy is older than this exe: run --install to refresh it");
+            }
+
             return 0;
         }
+
+        private static bool IsRunningAheadOfInstall() =>
+            !IsRunningFromInstall() && IsInstalledCopyStale(ExecutablePath());
 
         private static bool SameDirectory(string a, string b) =>
             string.Equals(a.TrimEnd('\\'), b.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
