@@ -38,8 +38,6 @@ namespace OrcaPresence
 
         public string? LargeImageKey { get; set; }
 
-        public string? LargeImageUrl { get; set; }
-
         public string? LargeImageText { get; set; }
 
         public string? SmallImageKey { get; set; }
@@ -92,21 +90,6 @@ namespace OrcaPresence
             return string.Join(" ", parts);
         }
 
-        /// <summary>The image reference for an agent, preferring uploaded art when it is in play.</summary>
-        public static string? AgentImageRef(string agentType, bool useUploadedArt)
-        {
-            if (useUploadedArt)
-            {
-                var key = AgentArt.ArtKey(agentType);
-                if (key != null)
-                {
-                    return key;
-                }
-            }
-
-            return AgentArt.FaviconUrl(agentType);
-        }
-
         public static PresenceActivity BuildActivity(PresenceInput input)
         {
             var project = Field(input.ProjectName != null
@@ -125,7 +108,10 @@ namespace OrcaPresence
                 // The branch name is the icon's tooltip, since line 2 carries the agent status.
                 SmallImageText = branchText.Length >= FieldMin ? branchText : "Branch",
                 SmallImageKey = uploaded ? AgentArt.BranchArtKey : null,
-                SmallImageUrl = uploaded ? null : AgentArt.BranchIconUrl
+                SmallImageUrl = uploaded ? null : AgentArt.BranchIconUrl,
+                // Why only the generic asset: per-agent logos are gone, so the large slot carries
+                // the application's own art when it is registered, and nothing otherwise.
+                LargeImageKey = uploaded ? PresenceAssetKey : null
             };
 
             if (input.AgentType == null)
@@ -133,31 +119,13 @@ namespace OrcaPresence
                 var state = ComposeStateLine(project, count);
                 activity.Details = "Using Orca";
                 activity.State = state.Length >= FieldMin ? state : "Orca";
-                activity.LargeImageKey = PresenceAssetKey;
-                activity.LargeImageText = "Orca";
                 return activity;
             }
 
             var agent = AgentDisplayName(input.AgentType);
-            var image = AgentImageRef(input.AgentType, uploaded);
             activity.Details = Field(WithOtherAgents(agent, input.OpenAgentCount));
             // Why the status and not a count: "+N" on line 1 already says how many are open.
             activity.State = ComposeAgentStateLine(project, input.AgentActive);
-            activity.LargeImageText = "Agent";
-
-            if (uploaded)
-            {
-                activity.LargeImageKey = image ?? PresenceAssetKey;
-            }
-            else if (image != null)
-            {
-                activity.LargeImageUrl = image;
-            }
-            else
-            {
-                activity.LargeImageKey = PresenceAssetKey;
-            }
-
             return activity;
         }
 

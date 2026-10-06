@@ -151,7 +151,7 @@ namespace OrcaPresence
         private static string? BuildAssets(PresenceActivity activity)
         {
             var parts = new List<string>();
-            AppendField(parts, "large_image", activity.LargeImageKey ?? activity.LargeImageUrl);
+            AppendField(parts, "large_image", activity.LargeImageKey);
             AppendField(parts, "large_text", activity.LargeImageText);
             AppendField(parts, "small_image", activity.SmallImageKey ?? activity.SmallImageUrl);
             AppendField(parts, "small_text", activity.SmallImageText);

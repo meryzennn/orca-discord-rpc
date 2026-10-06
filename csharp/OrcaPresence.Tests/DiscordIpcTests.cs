@@ -93,13 +93,13 @@ namespace OrcaPresence.Tests
             var activity = new PresenceActivity
             {
                 Details = "Claude", State = "orca",
-                LargeImageUrl = "https://example.test/a.png",
+                LargeImageKey = "orca",
                 SmallImageUrl = "https://example.test/b.png"
             };
             using var doc = JsonDocument.Parse(DiscordIpc.BuildSetActivityPayload(activity, "n", 1));
             var assets = doc.RootElement.GetProperty("args").GetProperty("activity").GetProperty("assets");
 
-            Assert.Equal("https://example.test/a.png", assets.GetProperty("large_image").GetString());
+            Assert.Equal("orca", assets.GetProperty("large_image").GetString());
             Assert.Equal("https://example.test/b.png", assets.GetProperty("small_image").GetString());
         }
 

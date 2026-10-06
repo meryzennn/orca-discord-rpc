@@ -35,7 +35,8 @@ namespace OrcaPresence.Tests
             var a = Build(null, null, 0);
             Assert.Equal("Using Orca", a.Details);
             Assert.Equal("Orca", a.State);
-            Assert.Equal("orca", a.LargeImageKey);
+            // Why null: agent logos are gone and nothing is uploaded, so the large slot is empty.
+            Assert.Null(a.LargeImageKey);
         }
 
         [Fact]
@@ -52,22 +53,31 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
-        public void UsesAssetKeysWhenArtworkIsUploaded()
+        public void UsesTheBranchAssetKeyWhenArtworkIsUploaded()
         {
             var a = Build("orca", "claude", 1, uploaded: true);
-            Assert.Equal("claude", a.LargeImageKey);
-            Assert.Null(a.LargeImageUrl);
             Assert.Equal("git-branch", a.SmallImageKey);
             Assert.Null(a.SmallImageUrl);
+            // Why: agent logos were removed, so the large slot is the application's own art.
+            Assert.Equal("orca", a.LargeImageKey);
         }
 
         [Fact]
-        public void UsesImageUrlsWhenNothingIsUploaded()
+        public void UsesTheBranchUrlWhenNothingIsUploaded()
         {
             var a = Build("orca", "claude", 1);
-            Assert.Null(a.LargeImageKey);
-            Assert.NotNull(a.LargeImageUrl);
             Assert.NotNull(a.SmallImageUrl);
+            Assert.Null(a.SmallImageKey);
+        }
+
+        [Fact]
+        public void NamesNoAgentArtworkAtAll()
+        {
+            // Why pinned: Discord renders only registered art and takes no external image, so a
+            // per-agent logo could never work without an upload step nobody wanted.
+            var a = Build("orca", "codex", 1);
+            Assert.Null(a.LargeImageKey);
+            Assert.Equal("Codex", a.Details);
         }
 
         [Fact]
