@@ -138,7 +138,26 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
-        public async Task ResetsTheTimerOnAProjectChange()
+        public async Task ResetsTheTimerAfterSessionClearsAndResumes()
+        {
+            var h = new Harness { State = Running() };
+            var c = h.Build();
+            await c.PollAsync();
+            Assert.Equal(T0, h.Applied[0].StartTimestamp);
+
+            h.State = null;
+            await c.PollAsync();
+            Assert.Equal(1, h.Cleared);
+
+            h.Now = T1;
+            h.State = Running();
+            await c.PollAsync();
+            Assert.Equal(2, h.Applied.Count);
+            Assert.Equal(T1, h.Applied[1].StartTimestamp);
+        }
+
+        [Fact]
+        public async Task KeepsTheTimerOnAProjectChange()
         {
             var h = new Harness { State = Running() };
             var c = h.Build();
@@ -150,7 +169,7 @@ namespace OrcaPresence.Tests
             };
             await c.PollAsync();
             Assert.Equal(T0, h.Applied[0].StartTimestamp);
-            Assert.Equal(T1, h.Applied[1].StartTimestamp);
+            Assert.Equal(T0, h.Applied[1].StartTimestamp);
         }
 
         [Fact]

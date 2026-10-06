@@ -43,8 +43,7 @@ export type PresenceController = {
 export function createPresenceController(deps: PresenceControllerDeps): PresenceController {
   const now = deps.now ?? (() => new Date())
   let lastKey: string | null = null
-  let projectStartedAt: Date | null = null
-  let currentProject: string | null = null
+  let sessionStartedAt: Date | null = null
   let lastEpoch = deps.connectionEpoch?.() ?? 0
 
   return {
@@ -70,8 +69,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         }
         if (await deps.clear().catch(() => false)) {
           lastKey = '__none__'
-          projectStartedAt = null
-          currentProject = null
+          sessionStartedAt = null
         }
         return
       }
@@ -87,8 +85,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         return
       }
 
-      const startedAt =
-        projectStartedAt !== null && currentProject === state.projectName ? projectStartedAt : now()
+      const startedAt = sessionStartedAt ?? now()
       const activity = buildActivity({
         projectName: state.projectName,
         agentType: state.agentType,
@@ -100,14 +97,12 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
       })
       if (await deps.apply(activity).catch(() => false)) {
         lastKey = key
-        projectStartedAt = startedAt
-        currentProject = state.projectName
+        sessionStartedAt = startedAt
       }
     },
     reset(): void {
       lastKey = null
-      projectStartedAt = null
-      currentProject = null
+      sessionStartedAt = null
     }
   }
 }

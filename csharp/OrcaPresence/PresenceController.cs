@@ -21,7 +21,7 @@ namespace OrcaPresence
 
     /// <summary>
     /// Turns polling into Discord updates: an unchanged reading costs nothing, and the elapsed
-    /// timer resets only when the workspace changes.
+    /// timer persists across workspace and agent switches during an active session.
     /// </summary>
     public sealed class PresenceController
     {
@@ -33,8 +33,7 @@ namespace OrcaPresence
         private readonly Func<bool> _useUploadedArt;
 
         private string? _lastKey;
-        private DateTime? _projectStartedAt;
-        private string? _currentProject;
+        private DateTime? _sessionStartedAt;
         private int _lastEpoch;
 
         public PresenceController(
@@ -58,8 +57,7 @@ namespace OrcaPresence
         public void Reset()
         {
             _lastKey = null;
-            _projectStartedAt = null;
-            _currentProject = null;
+            _sessionStartedAt = null;
         }
 
         public async Task PollAsync()
@@ -103,8 +101,7 @@ namespace OrcaPresence
                 if (cleared)
                 {
                     _lastKey = NoneKey;
-                    _projectStartedAt = null;
-                    _currentProject = null;
+                    _sessionStartedAt = null;
                 }
 
                 return;
@@ -124,9 +121,7 @@ namespace OrcaPresence
                 return;
             }
 
-            var startedAt = _projectStartedAt != null && _currentProject == state.ProjectName
-                ? _projectStartedAt.Value
-                : _now();
+            var startedAt = _sessionStartedAt ?? _now();
 
             var activity = Presence.BuildActivity(new PresenceInput
             {
@@ -152,8 +147,7 @@ namespace OrcaPresence
             if (applied)
             {
                 _lastKey = key;
-                _projectStartedAt = startedAt;
-                _currentProject = state.ProjectName;
+                _sessionStartedAt = startedAt;
             }
         }
 

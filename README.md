@@ -77,7 +77,7 @@ OrcaPresence.exe autostart status    # Shows whether autostart is currently enab
 | --- | --- |
 | Line 1 | The featured agent, plus `+N` when other agent panes are open — `Claude +1` |
 | Line 2 | The workspace folder, then `Working` or `Idle` |
-| Timer | Elapsed since you switched workspace |
+| Timer | Elapsed session time (continues across workspaces and agents) |
 | Small image | A branch icon; its tooltip is the branch name |
 
 - **Featured Agent**: The agent that most recently entered its state — opening Codex shows `Codex`, and its name stays there while waiting between turns. An active working agent takes precedence over an idle agent. `+N` counts every agent whose pane is open.

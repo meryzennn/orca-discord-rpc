@@ -81,13 +81,29 @@ describe('createPresenceController', () => {
     assert.equal(h.applied[1]?.details, 'Codex')
   })
 
-  it('resets the timer when the project changes', async () => {
+  it('keeps the timer when the project changes', async () => {
     const h = harness(RUNNING)
     await h.controller.poll()
     h.setNow(T1)
     h.setState({ ...RUNNING, projectName: 'other-repo' })
     await h.controller.poll()
     assert.equal(h.applied[0]?.startTimestamp, T0)
+    assert.equal(h.applied[1]?.startTimestamp, T0)
+  })
+
+  it('resets the timer after session clears and resumes', async () => {
+    const h = harness(RUNNING)
+    await h.controller.poll()
+    assert.equal(h.applied[0]?.startTimestamp, T0)
+
+    h.setState(null)
+    await h.controller.poll()
+    assert.equal(h.cleared(), 1)
+
+    h.setNow(T1)
+    h.setState(RUNNING)
+    await h.controller.poll()
+    assert.equal(h.applied.length, 2)
     assert.equal(h.applied[1]?.startTimestamp, T1)
   })
 
