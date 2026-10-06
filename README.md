@@ -9,7 +9,6 @@ Shows your active workspace and running agents directly on your Discord profile 
 
 [![Release](https://img.shields.io/github/v/release/meryzennn/orca-discord-rpc?color=5865F2&logo=github)](https://github.com/meryzennn/orca-discord-rpc/releases/latest)
 [![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen)](#build--development)
-[![Memory](https://img.shields.io/badge/memory-lightweight-blue)](#size--performance)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
