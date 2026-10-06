@@ -9,7 +9,7 @@ Shows your active workspace and running agents directly on your Discord profile 
 
 [![Release](https://img.shields.io/github/v/release/meryzennn/orca-discord-rpc?color=5865F2&logo=github)](https://github.com/meryzennn/orca-discord-rpc/releases/latest)
 [![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen)](#build--development)
-[![RAM](https://img.shields.io/badge/RAM-~2%20MB-blue)](#size--performance)
+[![Memory](https://img.shields.io/badge/memory-lightweight-blue)](#size--performance)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
@@ -28,7 +28,7 @@ Shows your active workspace and running agents directly on your Discord profile 
 
 ## ✨ What's New
 
-- 🚀 **Ultra-Lightweight RAM Footprint (~2 MB)**: Built-in working-set auto-trimming via native Win32 `SetProcessWorkingSetSize` continuously reduces memory usage from ~40 MB down to **~2–4 MB** in the background.
+- 🚀 **Ultra-Lightweight**: Built-in working-set auto-trimming via native Win32 `SetProcessWorkingSetSize` periodically flushes unused memory pages in the background, keeping memory footprint minimal.
 - 📦 **100% Pure Portable App**: No installer and no `%LOCALAPPDATA%` file duplication. Extract `OrcaPresence.exe` anywhere and run it immediately.
 - 🔄 **Automatic Background Update Checks**: Silently checks for newer GitHub releases in the background and surfaces an update notification directly in the tray menu with a 1-click download option.
 - ⭐ **Star on GitHub Tray Button**: Quick access with a custom golden star icon right in the tray context menu to easily support the repo.
@@ -113,10 +113,10 @@ The C# WinForms app is drastically smaller and lighter than typical Electron-bas
 | Metric | C# App (`OrcaPresence`) | Headless Node | Electron (Retired) |
 | --- | --- | --- | --- |
 | **Download / Published Size** | **~1.7 MB** (single exe: 580 KB) | ~25 MB (`node_modules`) | 106 MB installer |
-| **RAM Usage** | **~2–4 MB** (auto-trimmed) | ~45 MB | ~224 MB |
+| **RAM Usage** | **Lightweight** (auto-trimmed) | Moderate | Heavy (~200+ MB) |
 | **Background Processes** | **1** | 1 | 3 |
 
-*Working-set auto-trimming flushes unneeded pages back to the OS every 60 seconds and after garbage collection, keeping the memory footprint at ~2 MB.*
+*Working-set auto-trimming periodically flushes unneeded pages back to the OS in the background to maintain a minimal memory footprint.*
 
 ---
 
