@@ -28,6 +28,8 @@ namespace OrcaPresence
         /// <summary>True once the artwork is uploaded to the Discord application under matching keys.</summary>
         public bool UseUploadedArt { get; set; }
 
+        public bool Incognito { get; set; }
+
         public static AppConfig Load()
         {
             var config = new AppConfig();
@@ -46,6 +48,7 @@ namespace OrcaPresence
                 }
 
                 config.UseUploadedArt = fromFile.UseUploadedArt;
+                config.Incognito = fromFile.Incognito;
             }
 
             var envClientId = Environment.GetEnvironmentVariable("ORCA_DISCORD_CLIENT_ID");
@@ -59,7 +62,40 @@ namespace OrcaPresence
                 config.UseUploadedArt = true;
             }
 
+            if (Environment.GetEnvironmentVariable("ORCA_DISCORD_INCOGNITO") == "1")
+            {
+                config.Incognito = true;
+            }
+
             return config;
+        }
+
+        public void Save()
+        {
+            try
+            {
+                var path = ConfigPath();
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                var file = new ConfigFile
+                {
+                    ClientId = ClientId == DefaultClientId ? null : ClientId,
+                    PollMs = PollMs == DefaultPollMs ? null : (int?)PollMs,
+                    UseUploadedArt = UseUploadedArt,
+                    Incognito = Incognito
+                };
+
+                var json = JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(path, json);
+            }
+            catch
+            {
+                // Why tolerated: config write failure must not crash the app.
+            }
         }
 
         private static ConfigFile? ReadConfigFile()
@@ -94,6 +130,8 @@ namespace OrcaPresence
             [JsonPropertyName("pollMs")] public int? PollMs { get; set; }
 
             [JsonPropertyName("useUploadedArt")] public bool UseUploadedArt { get; set; }
+
+            [JsonPropertyName("incognito")] public bool Incognito { get; set; }
         }
     }
 }

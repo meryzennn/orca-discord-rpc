@@ -148,5 +148,25 @@ namespace OrcaPresence.Tests
             Assert.Equal(2, DiscordIpc.FrameOpcode(frame));
             Assert.Equal(7, DiscordIpc.FrameLength(frame));
         }
+
+        [Fact]
+        public void ActivityPayloadIncludesButtonsWhenPresent()
+        {
+            var activity = new PresenceActivity
+            {
+                Details = "Claude",
+                State = "orca · Working",
+                Buttons = new System.Collections.Generic.List<ActivityButton>
+                {
+                    new ActivityButton { Label = "View Repository", Url = "https://github.com/meryzennn/orca-discord-rpc" }
+                }
+            };
+
+            using var doc = JsonDocument.Parse(DiscordIpc.BuildSetActivityPayload(activity, "nonce-3", 123));
+            var buttons = doc.RootElement.GetProperty("args").GetProperty("activity").GetProperty("buttons");
+            Assert.Equal(1, buttons.GetArrayLength());
+            Assert.Equal("View Repository", buttons[0].GetProperty("label").GetString());
+            Assert.Equal("https://github.com/meryzennn/orca-discord-rpc", buttons[0].GetProperty("url").GetString());
+        }
     }
 }

@@ -33,7 +33,9 @@ namespace OrcaPresence
                 clientId: config.ClientId,
                 pollMs: config.PollMs,
                 useUploadedArt: config.UseUploadedArt,
-                log: Log);
+                log: Log,
+                deps: null,
+                incognito: () => _config.Incognito);
 
             _icon = new NotifyIcon
             {
@@ -375,6 +377,21 @@ namespace OrcaPresence
             }
 
             menu.Items.Add(new ToolStripMenuItem("Application id: " + _config.ClientId) { Enabled = false });
+
+            // Why: lets users hide folder names and git branches when working on private projects.
+            var incognitoItem = new ToolStripMenuItem("Incognito Mode")
+            {
+                Checked = _config.Incognito,
+                CheckOnClick = false
+            };
+            incognitoItem.Click += (_, __) =>
+            {
+                _config.Incognito = !_config.Incognito;
+                _config.Save();
+                Apply(_runtime.Status);
+                var ignored = _runtime.RefreshAsync();
+            };
+            menu.Items.Add(incognitoItem);
 
             // Why a checkable row: turning the login start on and off is the one setting a user
             // changes, and it should not need the command line.

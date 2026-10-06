@@ -19,6 +19,10 @@ namespace OrcaPresence
         /// <summary>Shown as the branch icon's tooltip; line 2 carries the status instead.</summary>
         public string? BranchName { get; set; }
 
+        public string? RepoUrl { get; set; }
+
+        public bool Incognito { get; set; }
+
         public DateTime StartedAt { get; set; }
 
         /// <summary>
@@ -26,6 +30,12 @@ namespace OrcaPresence
         /// fetch a loopback URL, so uploaded assets are the only way to use bundled PNGs.
         /// </summary>
         public bool UseUploadedArt { get; set; }
+    }
+
+    public sealed class ActivityButton
+    {
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
     }
 
     public sealed class PresenceActivity
@@ -45,6 +55,8 @@ namespace OrcaPresence
         public string? SmallImageUrl { get; set; }
 
         public string? SmallImageText { get; set; }
+
+        public List<ActivityButton>? Buttons { get; set; }
     }
 
     public static class Presence
@@ -92,11 +104,13 @@ namespace OrcaPresence
 
         public static PresenceActivity BuildActivity(PresenceInput input)
         {
-            var project = Field(input.ProjectName != null
-                ? Truncate(NormalizeName(input.ProjectName), ProjectLimit)
+            var isIncognito = input.Incognito;
+            var projectName = isIncognito ? "Folder: Private Project" : input.ProjectName;
+            var project = Field(projectName != null
+                ? Truncate(NormalizeName(projectName), ProjectLimit)
                 : "");
             var count = Math.Max(0, input.OpenAgentCount);
-            var branchText = input.BranchName != null
+            var branchText = (!isIncognito && input.BranchName != null)
                 ? Truncate(NormalizeName(input.BranchName), FieldLimit)
                 : "Branch";
             var uploaded = input.UseUploadedArt;
@@ -106,13 +120,19 @@ namespace OrcaPresence
                 StartTimestamp = input.StartedAt,
                 LargeImageText = "Orca",
                 // The branch name is the icon's tooltip, since line 2 carries the agent status.
-                SmallImageText = branchText.Length >= FieldMin ? branchText : "Branch",
-                SmallImageKey = uploaded ? AgentArt.BranchArtKey : null,
-                SmallImageUrl = uploaded ? null : AgentArt.BranchIconUrl,
-                // Why only the generic asset: per-agent logos are gone, so the large slot carries
-                // the application's own art when it is registered, and nothing otherwise.
+                SmallImageText = !isIncognito ? (branchText.Length >= FieldMin ? branchText : "Branch") : null,
+                SmallImageKey = (!isIncognito && uploaded) ? AgentArt.BranchArtKey : null,
+                SmallImageUrl = (!isIncognito && !uploaded) ? AgentArt.BranchIconUrl : null,
                 LargeImageKey = uploaded ? PresenceAssetKey : null
             };
+
+            if (!isIncognito && !string.IsNullOrEmpty(input.RepoUrl))
+            {
+                activity.Buttons = new List<ActivityButton>
+                {
+                    new ActivityButton { Label = "View Repository", Url = input.RepoUrl! }
+                };
+            }
 
             if (input.AgentType == null)
             {

@@ -153,6 +153,67 @@ namespace OrcaPresence.Tests
             Assert.Equal("Qwen Code", Presence.AgentDisplayName("qwen-code"));
         }
 
+        [Fact]
+        public void IncognitoHidesBranchFolderAndButtons()
+        {
+            var a = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "super-secret-project",
+                AgentType = "claude",
+                OpenAgentCount = 1,
+                AgentActive = true,
+                BranchName = "feature/confidential",
+                RepoUrl = "https://github.com/myorg/private-repo",
+                Incognito = true,
+                StartedAt = Started
+            });
+
+            Assert.Equal("Claude", a.Details);
+            Assert.Equal("Folder: Private Project · Working", a.State);
+            Assert.Null(a.SmallImageText);
+            Assert.Null(a.SmallImageKey);
+            Assert.Null(a.SmallImageUrl);
+            Assert.Null(a.Buttons);
+        }
+
+        [Fact]
+        public void IncognitoIdleShowsPrivateProjectIdle()
+        {
+            var a = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "secret",
+                AgentType = "codex",
+                OpenAgentCount = 1,
+                AgentActive = false,
+                Incognito = true,
+                StartedAt = Started
+            });
+
+            Assert.Equal("Codex", a.Details);
+            Assert.Equal("Folder: Private Project · Idle", a.State);
+        }
+
+        [Fact]
+        public void ShowsViewRepositoryButtonWhenNotIncognito()
+        {
+            var a = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "orca-discord-rpc",
+                AgentType = "claude",
+                OpenAgentCount = 1,
+                AgentActive = true,
+                BranchName = "main",
+                RepoUrl = "https://github.com/meryzennn/orca-discord-rpc",
+                Incognito = false,
+                StartedAt = Started
+            });
+
+            Assert.NotNull(a.Buttons);
+            Assert.Single(a.Buttons!);
+            Assert.Equal("View Repository", a.Buttons![0].Label);
+            Assert.Equal("https://github.com/meryzennn/orca-discord-rpc", a.Buttons![0].Url);
+        }
+
         private static PresenceActivity Build(string? project, string? agent, int count,
             bool active = true, string? branch = null, bool uploaded = false) =>
             Presence.BuildActivity(new PresenceInput

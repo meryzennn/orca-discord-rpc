@@ -61,7 +61,8 @@ namespace OrcaPresence
                 AgentType = featured?.AgentType,
                 OpenAgentCount = OrcaState.OpenAgentCount(active),
                 AgentActive = OrcaState.HasActiveAgent(active),
-                BranchName = OrcaState.BranchNameFor(active)
+                BranchName = OrcaState.BranchNameFor(active),
+                RepoUrl = GitRemote.ResolveRepoUrl(active.Path)
             };
         }
 

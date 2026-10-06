@@ -127,6 +127,23 @@ namespace OrcaPresence
                 parts.Add("\"assets\":" + assets);
             }
 
+            if (activity.Buttons != null && activity.Buttons.Count > 0)
+            {
+                var buttonElements = new List<string>();
+                foreach (var b in activity.Buttons)
+                {
+                    if (!string.IsNullOrEmpty(b.Label) && !string.IsNullOrEmpty(b.Url))
+                    {
+                        buttonElements.Add("{\"label\":" + JsonSerializer.Serialize(b.Label) + ",\"url\":" + JsonSerializer.Serialize(b.Url) + "}");
+                    }
+                }
+
+                if (buttonElements.Count > 0)
+                {
+                    parts.Add("\"buttons\":[" + string.Join(",", buttonElements) + "]");
+                }
+            }
+
             return "{" + string.Join(",", parts) + "}";
         }
 

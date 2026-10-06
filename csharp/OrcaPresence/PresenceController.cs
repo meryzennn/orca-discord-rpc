@@ -17,6 +17,8 @@ namespace OrcaPresence
 
         /// <summary>Shown as the branch icon's tooltip.</summary>
         public string? BranchName { get; set; }
+
+        public string? RepoUrl { get; set; }
     }
 
     /// <summary>
@@ -31,6 +33,7 @@ namespace OrcaPresence
         private readonly Func<int>? _connectionEpoch;
         private readonly Func<DateTime> _now;
         private readonly Func<bool> _useUploadedArt;
+        private readonly Func<bool>? _incognito;
 
         private string? _lastKey;
         private DateTime? _sessionStartedAt;
@@ -42,7 +45,8 @@ namespace OrcaPresence
             Func<Task<bool>> clear,
             Func<int>? connectionEpoch,
             Func<DateTime> now,
-            Func<bool> useUploadedArt)
+            Func<bool> useUploadedArt,
+            Func<bool>? incognito = null)
         {
             _readState = readState;
             _apply = apply;
@@ -50,6 +54,7 @@ namespace OrcaPresence
             _connectionEpoch = connectionEpoch;
             _now = now;
             _useUploadedArt = useUploadedArt;
+            _incognito = incognito;
             _lastEpoch = connectionEpoch?.Invoke() ?? 0;
         }
 
@@ -107,13 +112,16 @@ namespace OrcaPresence
                 return;
             }
 
+            var isIncognito = _incognito?.Invoke() ?? false;
             var key = string.Join("|", new[]
             {
                 state.ProjectName ?? "",
                 state.AgentType ?? "",
                 state.OpenAgentCount.ToString(),
                 state.AgentActive ? "1" : "0",
-                state.BranchName ?? ""
+                state.BranchName ?? "",
+                state.RepoUrl ?? "",
+                isIncognito ? "1" : "0"
             });
 
             if (key == _lastKey)
@@ -130,6 +138,8 @@ namespace OrcaPresence
                 OpenAgentCount = state.OpenAgentCount,
                 AgentActive = state.AgentActive,
                 BranchName = state.BranchName,
+                RepoUrl = state.RepoUrl,
+                Incognito = isIncognito,
                 StartedAt = startedAt,
                 UseUploadedArt = _useUploadedArt()
             });

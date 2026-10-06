@@ -48,6 +48,7 @@ namespace OrcaPresence
         private readonly Action<string> _log;
         private readonly DiscordPresence? _discord;
         private readonly Func<bool> _useUploadedArt;
+        private readonly Func<bool>? _incognito;
 
         private readonly object _gate = new object();
         private Action? _cancel;
@@ -63,11 +64,13 @@ namespace OrcaPresence
             int pollMs,
             bool useUploadedArt,
             Action<string> log,
-            RuntimeDeps? deps = null)
+            RuntimeDeps? deps = null,
+            Func<bool>? incognito = null)
         {
             _pollMs = pollMs;
             _log = log;
             _useUploadedArt = () => useUploadedArt;
+            _incognito = incognito;
 
             if (deps != null)
             {
@@ -167,6 +170,12 @@ namespace OrcaPresence
             Notify();
         }
 
+        public async Task RefreshAsync()
+        {
+            _controller?.Reset();
+            await TickAsync();
+        }
+
         public void Dispose()
         {
             _cancel?.Invoke();
@@ -209,7 +218,8 @@ namespace OrcaPresence
                         clear: _deps.Clear,
                         connectionEpoch: _deps.ConnectionGeneration,
                         now: () => DateTime.UtcNow,
-                        useUploadedArt: _useUploadedArt);
+                        useUploadedArt: _useUploadedArt,
+                        incognito: _incognito);
                 }
 
                 return _controller;
