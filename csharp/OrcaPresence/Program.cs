@@ -63,7 +63,12 @@ namespace OrcaPresence
             {
                 if (!isFirst)
                 {
-                    // Why: the newest launch exits rather than running a second presence.
+                    // Why: notify the user so they know the app is already active in their system tray.
+                    MessageBox.Show(
+                        "Orca Discord Presence is already running in the system tray.",
+                        TrayStatus.AppDisplayName,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
                     return 0;
                 }
 

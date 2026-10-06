@@ -44,6 +44,16 @@ namespace OrcaPresence
             // raises StatusChanged as it settles.
             var ignored = _runtime.StartAsync();
             Apply(_runtime.Status);
+
+            try
+            {
+                // Why: gives the user instant visual confirmation that the app is active in the notification tray.
+                _icon.ShowBalloonTip(3000, TrayStatus.AppDisplayName, "Running in the system tray. Right-click the icon for options.", ToolTipIcon.Info);
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
         public void Dispose()
