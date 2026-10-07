@@ -74,6 +74,7 @@ namespace OrcaPresence
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
 
                 var config = AppConfig.Load();
                 using (var host = new TrayHost(config))

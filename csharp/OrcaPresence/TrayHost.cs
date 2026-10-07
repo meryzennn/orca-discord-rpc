@@ -175,6 +175,7 @@ namespace OrcaPresence
                 ClientSize = new Size(340, 110),
                 MaximizeBox = false,
                 MinimizeBox = false,
+                ControlBox = false,
                 ShowInTaskbar = true,
                 TopMost = true
             };
@@ -198,38 +199,35 @@ namespace OrcaPresence
 
             loadingForm.Controls.Add(label);
             loadingForm.Controls.Add(progress);
-            loadingForm.Show();
-            loadingForm.Refresh();
 
-            Task.Run(async () =>
+            loadingForm.Shown += async (_, __) =>
             {
                 var currentExe = Autostart.CurrentExecutablePath();
-                var success = await UpdateChecker.DownloadAndInstallUpdateAsync(update, currentExe).ConfigureAwait(false);
+                var currentPid = Process.GetCurrentProcess().Id;
+                var success = await UpdateChecker.DownloadAndInstallUpdateAsync(update, currentExe, currentPid).ConfigureAwait(true);
                 if (success)
                 {
-                    SafeInvoke(() =>
-                    {
-                        loadingForm.Close();
-                        loadingForm.Dispose();
-                        Application.Exit();
-                    });
+                    loadingForm.Hide();
+                    loadingForm.Dispose();
+                    _icon.Visible = false;
+                    _icon.Dispose();
+                    Environment.Exit(0);
                 }
                 else
                 {
                     _updating = false;
-                    SafeInvoke(() =>
-                    {
-                        loadingForm.Close();
-                        loadingForm.Dispose();
-                        MessageBox.Show(
-                            "Could not complete the automatic update.\nOpening the release page in your browser instead.",
-                            "Update Notice",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning);
-                        OpenUrl(update.Url);
-                    });
+                    loadingForm.Close();
+                    loadingForm.Dispose();
+                    MessageBox.Show(
+                        "Could not complete the automatic update.\nOpening the release page in your browser instead.",
+                        "Update Notice",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    OpenUrl(update.Url);
                 }
-            });
+            };
+
+            loadingForm.ShowDialog();
         }
 
         public void Dispose()
@@ -261,9 +259,10 @@ namespace OrcaPresence
                 return;
             }
 
-            if (_syncContext != null && SynchronizationContext.Current != _syncContext)
+            var ctx = _syncContext ?? SynchronizationContext.Current;
+            if (ctx != null && SynchronizationContext.Current != ctx)
             {
-                _syncContext.Post(_ =>
+                ctx.Post(_ =>
                 {
                     if (!_disposed)
                     {

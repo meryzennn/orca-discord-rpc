@@ -18,7 +18,7 @@ namespace OrcaPresence
 
     public static class UpdateChecker
     {
-        public const string CurrentVersion = "0.1.5";
+        public const string CurrentVersion = "0.1.6";
         public const string RepoUrl = "https://github.com/meryzennn/orca-discord-rpc";
         public const string ReleasesApiUrl = "https://api.github.com/repos/meryzennn/orca-discord-rpc/releases/latest";
 
@@ -94,11 +94,23 @@ namespace OrcaPresence
         /// Downloads the release zip and invokes a background PowerShell script to cleanly
         /// unpack, replace files, and restart the executable after this process exits.
         /// </summary>
-        public static async Task<bool> DownloadAndInstallUpdateAsync(UpdateInfo update, string targetExe)
+        public static async Task<bool> DownloadAndInstallUpdateAsync(UpdateInfo update, string targetExe, int currentPid = 0)
         {
             if (string.IsNullOrEmpty(update.DownloadUrl))
             {
                 return false;
+            }
+
+            if (currentPid <= 0)
+            {
+                try
+                {
+                    currentPid = Process.GetCurrentProcess().Id;
+                }
+                catch
+                {
+                    currentPid = 0;
+                }
             }
 
             var tempZip = Path.Combine(Path.GetTempPath(), "OrcaPresence-update.zip");
@@ -122,12 +134,18 @@ namespace OrcaPresence
                     return false;
                 }
 
-                // PowerShell command: wait for the old PID to release its lock, expand archive into destination, start new exe, and clean up temp zip.
+                // PowerShell command: wait for the old PID to completely terminate, ensure mutex and file locks are released,
+                // retry unzipping in case of temporary locks, start new exe, and clean up temp zip.
+                var waitCmd = currentPid > 0
+                    ? "$ErrorActionPreference = 'SilentlyContinue'; Wait-Process -Id " + currentPid + " -Timeout 10; Stop-Process -Id " + currentPid + " -Force; "
+                    : "$ErrorActionPreference = 'SilentlyContinue'; Start-Sleep -Milliseconds 1200; ";
+
                 var psArgs = "-NoProfile -WindowStyle Hidden -Command \"" +
-                    "Start-Sleep -Milliseconds 1200; " +
-                    "Expand-Archive -Force -LiteralPath '" + tempZip.Replace("'", "''") + "' -DestinationPath '" + targetDir.Replace("'", "''") + "'; " +
+                    waitCmd +
+                    "Start-Sleep -Milliseconds 500; " +
+                    "for ($i = 0; $i -lt 5; $i++) { try { Expand-Archive -Force -LiteralPath '" + tempZip.Replace("'", "''") + "' -DestinationPath '" + targetDir.Replace("'", "''") + "'; break } catch { Start-Sleep -Milliseconds 500 } }; " +
                     "Start-Process -FilePath '" + targetExe.Replace("'", "''") + "'; " +
-                    "Remove-Item -LiteralPath '" + tempZip.Replace("'", "''") + "' -ErrorAction SilentlyContinue\"";
+                    "Remove-Item -LiteralPath '" + tempZip.Replace("'", "''") + "'\"";
 
                 Process.Start(new ProcessStartInfo("powershell.exe", psArgs)
                 {
