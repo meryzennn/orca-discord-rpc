@@ -11,22 +11,24 @@ namespace OrcaPresence.Tests
         public void NamesTheAgentAndTheFolderWithStatus()
         {
             var a = Build("orca-discord-rpc", "claude", 1);
-            Assert.Equal("Agent: Claude", a.Details);
-            Assert.Equal("Folder: orca-discord-rpc · Working", a.State);
+            Assert.Equal("Agent: Claude · Working", a.Details);
+            Assert.Equal("Folder: orca-discord-rpc", a.State);
         }
 
         [Fact]
         public void AppendsTheOtherOpenAgents()
         {
-            Assert.Equal("Agent: Codex +1", Build("orca", "codex", 2).Details);
-            Assert.Equal("Agent: Claude +2", Build("orca", "claude", 3).Details);
-            Assert.Equal("Agent: Codex", Build("orca", "codex", 1).Details);
+            Assert.Equal("Agent: Codex +1 · Working", Build("orca", "codex", 2).Details);
+            Assert.Equal("Agent: Claude +2 · Working", Build("orca", "claude", 3).Details);
+            Assert.Equal("Agent: Codex · Working", Build("orca", "codex", 1).Details);
         }
 
         [Fact]
         public void ShowsIdleWhenBetweenTurns()
         {
-            Assert.Equal("Folder: orca · Idle", Build("orca", "claude", 1, active: false).State);
+            var a = Build("orca", "claude", 1, active: false);
+            Assert.Equal("Agent: Claude · Idle", a.Details);
+            Assert.Equal("Folder: orca", a.State);
         }
 
         [Fact]
@@ -77,14 +79,14 @@ namespace OrcaPresence.Tests
             // per-agent logo could never work without an upload step nobody wanted.
             var a = Build("orca", "codex", 1);
             Assert.Null(a.LargeImageKey);
-            Assert.Equal("Agent: Codex", a.Details);
+            Assert.Equal("Agent: Codex · Working", a.Details);
         }
 
         [Fact]
         public void FallsBackToTheOrcaAssetForAnUnknownAgent()
         {
             var a = Build("orca", "some-in-house-agent", 1, uploaded: true);
-            Assert.Equal("Agent: Some In House Agent", a.Details);
+            Assert.Equal("Agent: Some In House Agent · Working", a.Details);
             Assert.Equal("orca", a.LargeImageKey);
         }
 
@@ -140,8 +142,8 @@ namespace OrcaPresence.Tests
         public void KeepsTheAgentVisibleWhenTheLineWouldOverflow()
         {
             var a = Build(new string('x', 120), "claude", 1);
-            Assert.True(a.State.Length <= 128);
-            Assert.EndsWith("Working", a.State);
+            Assert.True(a.State.Length <= 100);
+            Assert.Equal("Agent: Claude · Working", a.Details);
         }
 
         [Fact]
@@ -154,7 +156,7 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
-        public void IncognitoHidesBranchFolderAndButtons()
+        public void IncognitoHidesBranchFolderAndShowsAgentIcon()
         {
             var a = Presence.BuildActivity(new PresenceInput
             {
@@ -168,16 +170,16 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
-            Assert.Equal("Agent: Claude", a.Details);
-            Assert.Equal("Folder: Private Project · Working", a.State);
-            Assert.Null(a.SmallImageText);
+            Assert.Equal("Agent: Claude · Working", a.Details);
+            Assert.Equal("Folder: Private Project", a.State);
+            Assert.Equal("Agent: Claude", a.SmallImageText);
             Assert.Null(a.SmallImageKey);
-            Assert.Null(a.SmallImageUrl);
+            Assert.Equal("https://www.google.com/s2/favicons?domain=claude.ai&sz=128", a.SmallImageUrl);
             Assert.Null(a.Buttons);
         }
 
         [Fact]
-        public void IncognitoIdleShowsPrivateProjectIdle()
+        public void IncognitoIdleShowsPrivateProjectIdleAndAgentIcon()
         {
             var a = Presence.BuildActivity(new PresenceInput
             {
@@ -189,8 +191,31 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
-            Assert.Equal("Agent: Codex", a.Details);
-            Assert.Equal("Folder: Private Project · Idle", a.State);
+            Assert.Equal("Agent: Codex · Idle", a.Details);
+            Assert.Equal("Folder: Private Project", a.State);
+            Assert.Equal("Agent: Codex", a.SmallImageText);
+            Assert.Equal("https://www.google.com/s2/favicons?domain=openai.com&sz=128", a.SmallImageUrl);
+        }
+
+        [Fact]
+        public void IncognitoUploadedArtUsesAgentKey()
+        {
+            var a = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "secret",
+                AgentType = "antigravity",
+                OpenAgentCount = 1,
+                AgentActive = true,
+                Incognito = true,
+                UseUploadedArt = true,
+                StartedAt = Started
+            });
+
+            Assert.Equal("Agent: Antigravity · Working", a.Details);
+            Assert.Equal("Folder: Private Project", a.State);
+            Assert.Equal("Agent: Antigravity", a.SmallImageText);
+            Assert.Equal("agy", a.SmallImageKey);
+            Assert.Null(a.SmallImageUrl);
         }
 
         [Fact]
@@ -208,8 +233,8 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
-            Assert.Equal("Agent: Claude", a.Details);
-            Assert.Equal("Folder: orca-discord-rpc · Working", a.State);
+            Assert.Equal("Agent: Claude · Working", a.Details);
+            Assert.Equal("Folder: orca-discord-rpc", a.State);
             Assert.NotNull(a.Buttons);
             Assert.Single(a.Buttons!);
             Assert.Equal("View Repository", a.Buttons![0].Label);

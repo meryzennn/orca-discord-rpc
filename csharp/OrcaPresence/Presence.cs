@@ -125,19 +125,37 @@ namespace OrcaPresence
             {
                 StartTimestamp = input.StartedAt,
                 LargeImageText = "Orca",
-                // The branch name is the icon's tooltip, since line 2 carries the agent status.
-                SmallImageText = !isIncognito ? (branchText.Length >= FieldMin ? branchText : "Branch") : null,
-                SmallImageKey = (!isIncognito && uploaded) ? AgentArt.BranchArtKey : null,
-                SmallImageUrl = (!isIncognito && !uploaded) ? AgentArt.BranchIconUrl : null,
                 LargeImageKey = uploaded ? PresenceAssetKey : null
             };
 
-            if (!isIncognito && !string.IsNullOrEmpty(input.RepoUrl))
+            if (isIncognito)
             {
-                activity.Buttons = new List<ActivityButton>
+                if (input.AgentType != null)
                 {
-                    new ActivityButton { Label = "View Repository", Url = input.RepoUrl! }
-                };
+                    var agentKey = uploaded ? AgentArt.GetAgentArtKey(input.AgentType) : null;
+                    var agentUrl = agentKey == null ? AgentArt.GetAgentIconUrl(input.AgentType) : null;
+                    if (agentKey != null || agentUrl != null)
+                    {
+                        var agentName = AgentDisplayName(input.AgentType);
+                        activity.SmallImageKey = agentKey;
+                        activity.SmallImageUrl = agentUrl;
+                        activity.SmallImageText = "Agent: " + agentName;
+                    }
+                }
+            }
+            else
+            {
+                activity.SmallImageText = branchText.Length >= FieldMin ? branchText : "Branch";
+                activity.SmallImageKey = uploaded ? AgentArt.BranchArtKey : null;
+                activity.SmallImageUrl = !uploaded ? AgentArt.BranchIconUrl : null;
+
+                if (!string.IsNullOrEmpty(input.RepoUrl))
+                {
+                    activity.Buttons = new List<ActivityButton>
+                    {
+                        new ActivityButton { Label = "View Repository", Url = input.RepoUrl! }
+                    };
+                }
             }
 
             if (input.AgentType == null)
@@ -149,11 +167,13 @@ namespace OrcaPresence
             }
 
             var agent = AgentDisplayName(input.AgentType);
+            var status = input.AgentActive ? "Working" : "Idle";
             activity.Details = agent.Length >= FieldMin
-                ? Field("Agent: " + WithOtherAgents(agent, input.OpenAgentCount))
+                ? Field("Agent: " + WithOtherAgents(agent, input.OpenAgentCount) + " · " + status)
                 : "";
-            // Why the status and not a count: "+N" on line 1 already says how many are open.
-            activity.State = ComposeAgentStateLine(project, input.AgentActive);
+            activity.State = project.Length >= FieldMin
+                ? project
+                : (status.Length >= FieldMin ? status : "Orca");
             return activity;
         }
 
@@ -175,20 +195,6 @@ namespace OrcaPresence
         {
             var others = Math.Max(0, openAgentCount) - 1;
             return others > 0 ? agent + " +" + others : agent;
-        }
-
-        /// <summary>Line 2 for an agent row: the folder, then whether the agent is mid-turn.</summary>
-        private static string ComposeAgentStateLine(string project, bool active)
-        {
-            var status = active ? "Working" : "Idle";
-            if (project.Length == 0)
-            {
-                return status;
-            }
-
-            var suffix = " · " + status;
-            var room = Math.Max(0, FieldLimit - suffix.Length);
-            return project.Length <= room ? project + suffix : project.Substring(0, room) + suffix;
         }
 
         /// <summary>Line 2 when no agent is known: the folder and the open-agent count.</summary>

@@ -18,7 +18,7 @@ namespace OrcaPresence
 
     public static class UpdateChecker
     {
-        public const string CurrentVersion = "0.1.6";
+        public const string CurrentVersion = "0.1.7";
         public const string RepoUrl = "https://github.com/meryzennn/orca-discord-rpc";
         public const string ReleasesApiUrl = "https://api.github.com/repos/meryzennn/orca-discord-rpc/releases/latest";
 
