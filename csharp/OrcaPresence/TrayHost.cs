@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,6 +18,8 @@ namespace OrcaPresence
         private readonly AppConfig _config;
         private readonly PresenceRuntime _runtime;
         private readonly NotifyIcon _icon;
+        private readonly Icon _normalIcon;
+        private Icon? _badgeIcon;
         private readonly System.Threading.Timer _trimTimer;
         private readonly System.Threading.Timer _updateTimer;
         private readonly SynchronizationContext? _syncContext;
@@ -37,9 +40,10 @@ namespace OrcaPresence
                 deps: null,
                 incognito: () => _config.Incognito);
 
+            _normalIcon = LoadIcon();
             _icon = new NotifyIcon
             {
-                Icon = LoadIcon(),
+                Icon = _normalIcon,
                 Text = TrayStatus.AppDisplayName,
                 Visible = true
             };
@@ -240,6 +244,8 @@ namespace OrcaPresence
             _updateTimer.Dispose();
             _icon.Visible = false;
             _icon.Dispose();
+            _badgeIcon?.Dispose();
+            _normalIcon.Dispose();
             _runtime.Dispose();
         }
 
@@ -320,12 +326,59 @@ namespace OrcaPresence
             return SystemIcons.Application;
         }
 
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
+
+        public static Icon CreateBadgeIcon(Icon baseIcon)
+        {
+            try
+            {
+                using (var bmp = baseIcon.ToBitmap())
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    var size = bmp.Width;
+                    var badgeRadius = size * 0.22f;
+                    var centerX = size - badgeRadius - 1f;
+                    var centerY = badgeRadius + 1f;
+
+                    using (var outlinePen = new Pen(Color.FromArgb(240, 240, 240), 1.2f))
+                    using (var fillBrush = new SolidBrush(Color.FromArgb(237, 66, 69))) // Discord Red
+                    {
+                        var rect = new RectangleF(centerX - badgeRadius, centerY - badgeRadius, badgeRadius * 2, badgeRadius * 2);
+                        g.FillEllipse(fillBrush, rect);
+                        g.DrawEllipse(outlinePen, rect);
+                    }
+
+                    var hIcon = bmp.GetHicon();
+                    try
+                    {
+                        using (var temp = Icon.FromHandle(hIcon))
+                        {
+                            return (Icon)temp.Clone();
+                        }
+                    }
+                    finally
+                    {
+                        DestroyIcon(hIcon);
+                    }
+                }
+            }
+            catch
+            {
+                return baseIcon;
+            }
+        }
+
         private void Apply(RuntimeStatus status)
         {
             if (_disposed)
             {
                 return;
             }
+
+            var hasUpdate = _availableUpdate != null && _availableUpdate.HasUpdate;
+            _icon.Icon = hasUpdate ? (_badgeIcon ??= CreateBadgeIcon(_normalIcon)) : _normalIcon;
 
             var described = TrayStatus.Describe(status);
             // Why short: NotifyIcon.Text is capped at 63 characters by the shell.

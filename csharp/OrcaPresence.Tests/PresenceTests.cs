@@ -216,6 +216,18 @@ namespace OrcaPresence.Tests
             Assert.Equal("https://github.com/meryzennn/orca-discord-rpc", a.Buttons![0].Url);
         }
 
+        [Fact]
+        public void CreateBadgeIconProducesValidIcon()
+        {
+            using (var baseIcon = System.Drawing.SystemIcons.Application)
+            using (var badge = TrayHost.CreateBadgeIcon(baseIcon))
+            {
+                Assert.NotNull(badge);
+                Assert.True(badge.Width > 0);
+                Assert.True(badge.Height > 0);
+            }
+        }
+
         private static PresenceActivity Build(string? project, string? agent, int count,
             bool active = true, string? branch = null, bool uploaded = false) =>
             Presence.BuildActivity(new PresenceInput
