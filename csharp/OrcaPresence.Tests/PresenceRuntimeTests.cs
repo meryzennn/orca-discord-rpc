@@ -54,7 +54,7 @@ namespace OrcaPresence.Tests
             var f = new Fake();
             await Build(f).StartAsync();
             Assert.Single(f.Applied);
-            Assert.Equal("Claude", f.Applied[0]);
+            Assert.Equal("Agent: Claude", f.Applied[0]);
             Assert.True(f.Logs.Exists(l => l.Contains("Orca detected")));
         }
 

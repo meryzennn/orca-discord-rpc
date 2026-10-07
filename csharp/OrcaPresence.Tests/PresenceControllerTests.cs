@@ -51,8 +51,8 @@ namespace OrcaPresence.Tests
             var h = new Harness { State = Running() };
             await h.Build().PollAsync();
             Assert.Single(h.Applied);
-            Assert.Equal("Claude", h.Applied[0].Details);
-            Assert.Equal("orca · Working", h.Applied[0].State);
+            Assert.Equal("Agent: Claude", h.Applied[0].Details);
+            Assert.Equal("Folder: orca · Working", h.Applied[0].State);
         }
 
         [Fact]
@@ -78,7 +78,7 @@ namespace OrcaPresence.Tests
             };
             await c.PollAsync();
             Assert.Equal(2, h.Applied.Count);
-            Assert.Equal("Claude +1", h.Applied[1].Details);
+            Assert.Equal("Agent: Claude +1", h.Applied[1].Details);
         }
 
         [Fact]

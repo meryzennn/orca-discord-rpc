@@ -204,7 +204,10 @@ namespace OrcaPresence
                                     _lastPushAt = DateTime.UtcNow;
                                     _lastError = null;
                                     // Why the art: this line is the only record of what Discord was told.
-                                    _log("pushed: " + activity.Details + " | " + activity.State);
+                                    var btnInfo = (activity.Buttons != null && activity.Buttons.Count > 0)
+                                        ? " | btn=" + activity.Buttons[0].Url
+                                        : "";
+                                    _log("pushed: " + activity.Details + " | " + activity.State + btnInfo);
                                 }
                                 else
                                 {

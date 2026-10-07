@@ -11,22 +11,22 @@ namespace OrcaPresence.Tests
         public void NamesTheAgentAndTheFolderWithStatus()
         {
             var a = Build("orca-discord-rpc", "claude", 1);
-            Assert.Equal("Claude", a.Details);
-            Assert.Equal("orca-discord-rpc · Working", a.State);
+            Assert.Equal("Agent: Claude", a.Details);
+            Assert.Equal("Folder: orca-discord-rpc · Working", a.State);
         }
 
         [Fact]
         public void AppendsTheOtherOpenAgents()
         {
-            Assert.Equal("Codex +1", Build("orca", "codex", 2).Details);
-            Assert.Equal("Claude +2", Build("orca", "claude", 3).Details);
-            Assert.Equal("Codex", Build("orca", "codex", 1).Details);
+            Assert.Equal("Agent: Codex +1", Build("orca", "codex", 2).Details);
+            Assert.Equal("Agent: Claude +2", Build("orca", "claude", 3).Details);
+            Assert.Equal("Agent: Codex", Build("orca", "codex", 1).Details);
         }
 
         [Fact]
         public void ShowsIdleWhenBetweenTurns()
         {
-            Assert.Equal("orca · Idle", Build("orca", "claude", 1, active: false).State);
+            Assert.Equal("Folder: orca · Idle", Build("orca", "claude", 1, active: false).State);
         }
 
         [Fact]
@@ -42,7 +42,7 @@ namespace OrcaPresence.Tests
         [Fact]
         public void PutsTheFolderAloneOnLineTwoWithoutAnAgent()
         {
-            Assert.Equal("orca", Build("orca", null, 0).State);
+            Assert.Equal("Folder: orca", Build("orca", null, 0).State);
         }
 
         [Fact]
@@ -77,14 +77,14 @@ namespace OrcaPresence.Tests
             // per-agent logo could never work without an upload step nobody wanted.
             var a = Build("orca", "codex", 1);
             Assert.Null(a.LargeImageKey);
-            Assert.Equal("Codex", a.Details);
+            Assert.Equal("Agent: Codex", a.Details);
         }
 
         [Fact]
         public void FallsBackToTheOrcaAssetForAnUnknownAgent()
         {
             var a = Build("orca", "some-in-house-agent", 1, uploaded: true);
-            Assert.Equal("Some In House Agent", a.Details);
+            Assert.Equal("Agent: Some In House Agent", a.Details);
             Assert.Equal("orca", a.LargeImageKey);
         }
 
@@ -133,7 +133,7 @@ namespace OrcaPresence.Tests
         public void CollapsesWhitespaceInNames()
         {
             var a = Build("my  project\n\ttwo", null, 0);
-            Assert.Equal("my project two", a.State);
+            Assert.Equal("Folder: my project two", a.State);
         }
 
         [Fact]
@@ -168,7 +168,7 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
-            Assert.Equal("Claude", a.Details);
+            Assert.Equal("Agent: Claude", a.Details);
             Assert.Equal("Folder: Private Project · Working", a.State);
             Assert.Null(a.SmallImageText);
             Assert.Null(a.SmallImageKey);
@@ -189,7 +189,7 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
-            Assert.Equal("Codex", a.Details);
+            Assert.Equal("Agent: Codex", a.Details);
             Assert.Equal("Folder: Private Project · Idle", a.State);
         }
 
@@ -208,6 +208,8 @@ namespace OrcaPresence.Tests
                 StartedAt = Started
             });
 
+            Assert.Equal("Agent: Claude", a.Details);
+            Assert.Equal("Folder: orca-discord-rpc · Working", a.State);
             Assert.NotNull(a.Buttons);
             Assert.Single(a.Buttons!);
             Assert.Equal("View Repository", a.Buttons![0].Label);

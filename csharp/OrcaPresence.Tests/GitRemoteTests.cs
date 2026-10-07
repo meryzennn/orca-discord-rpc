@@ -17,5 +17,30 @@ namespace OrcaPresence.Tests
         {
             Assert.Equal(expected, GitRemote.NormalizeGitUrl(raw));
         }
+
+        [Fact]
+        public void ParsesRemoteUrlFromGitConfigLines()
+        {
+            var configLines = new[]
+            {
+                "[core]",
+                "\trepositoryformatversion = 0",
+                "[remote \"origin\"]",
+                "\turl = https://github.com/meryzennn/orca-discord-rpc.git",
+                "\tfetch = +refs/heads/*:refs/remotes/origin/*",
+                "[branch \"main\"]",
+                "\tremote = origin"
+            };
+
+            var parsed = GitRemote.ParseRemoteUrlFromConfig(configLines);
+            Assert.Equal("https://github.com/meryzennn/orca-discord-rpc.git", parsed);
+        }
+
+        [Fact]
+        public void ResolvesRepoUrlForCurrentWorkspace()
+        {
+            var url = GitRemote.ResolveRepoUrl(System.IO.Directory.GetCurrentDirectory());
+            Assert.Equal("https://github.com/meryzennn/orca-discord-rpc", url);
+        }
     }
 }

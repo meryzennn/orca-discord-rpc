@@ -105,10 +105,16 @@ namespace OrcaPresence
         public static PresenceActivity BuildActivity(PresenceInput input)
         {
             var isIncognito = input.Incognito;
-            var projectName = isIncognito ? "Folder: Private Project" : input.ProjectName;
-            var project = Field(projectName != null
-                ? Truncate(NormalizeName(projectName), ProjectLimit)
-                : "");
+            var rawFolder = isIncognito ? "Private Project" : input.ProjectName;
+            var normalizedFolder = !string.IsNullOrWhiteSpace(rawFolder)
+                ? NormalizeName(rawFolder!)
+                : "";
+            var folder = Field(normalizedFolder);
+            var project = folder.Length > 0
+                ? (folder.StartsWith("Folder:", StringComparison.OrdinalIgnoreCase)
+                    ? folder
+                    : Truncate("Folder: " + folder, ProjectLimit))
+                : "";
             var count = Math.Max(0, input.OpenAgentCount);
             var branchText = (!isIncognito && input.BranchName != null)
                 ? Truncate(NormalizeName(input.BranchName), FieldLimit)
@@ -143,7 +149,9 @@ namespace OrcaPresence
             }
 
             var agent = AgentDisplayName(input.AgentType);
-            activity.Details = Field(WithOtherAgents(agent, input.OpenAgentCount));
+            activity.Details = agent.Length >= FieldMin
+                ? Field("Agent: " + WithOtherAgents(agent, input.OpenAgentCount))
+                : "";
             // Why the status and not a count: "+N" on line 1 already says how many are open.
             activity.State = ComposeAgentStateLine(project, input.AgentActive);
             return activity;
