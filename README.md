@@ -26,6 +26,7 @@ Shows your active workspace and running agents directly on your Discord profile 
 
 ## ✨ What's New
 
+- 🤖 **Agent Model on the Agent Icon**: In Incognito Mode, hovering the agent icon shows the model the agent is running, such as `Claude Opus 5.5`, instead of just `Agent: Claude`. Read from Claude Code and Codex session logs; other agents keep the old label.
 - 🚀 **Ultra-Lightweight**: Built-in working-set auto-trimming via native Win32 `SetProcessWorkingSetSize` periodically flushes unused memory pages in the background, keeping memory footprint minimal.
 - 📦 **100% Pure Portable App**: No installer and no `%LOCALAPPDATA%` file duplication. Extract `OrcaPresence.exe` anywhere and run it immediately.
 - 🔄 **Automatic Background Update Checks**: Silently checks for newer GitHub releases in the background and surfaces an update notification directly in the tray menu with a 1-click download option.
@@ -79,10 +80,12 @@ OrcaPresence.exe autostart status    # Shows whether autostart is currently enab
 | Line 2 | The workspace folder, then `Working` or `Idle` |
 | Timer | Elapsed session time (continues across workspaces and agents) |
 | Small image | A branch icon; its tooltip is the branch name |
+| Small image (Incognito) | The agent icon; its tooltip is the model, such as `Claude Opus 5.5` |
 
 - **Featured Agent**: The agent that most recently entered its state — opening Codex shows `Codex`, and its name stays there while waiting between turns. An active working agent takes precedence over an idle agent. `+N` counts every agent whose pane is open.
 - **Folder**: The active workspace folder name taken from the Orca workspace path.
 - **Branch**: Displays the git branch name in the small badge tooltip.
+- **Model**: Orca does not report which model an agent runs, so the app reads it from the agent's own session log: Claude Code from `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`), Codex from `%USERPROFILE%\.codex\sessions` (or `CODEX_HOME`). When two sessions share one workspace, the one that wrote most recently wins. Other agents, or a missing log, fall back to `Agent: <name>`.
 
 ---
 
