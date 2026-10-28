@@ -63,6 +63,12 @@ describe('buildActivity', () => {
     assert.equal(activity.state, 'orca · Working')
   })
 
+  it('names the model on the agent icon when it is known', () => {
+    const base = { projectName: 'orca', agentType: 'claude', runningAgentCount: 1, startedAt }
+    assert.equal(buildActivity({ ...base, model: 'Claude Opus 5.5' }).largeImageText, 'Claude Opus 5.5')
+    assert.equal(buildActivity(base).largeImageText, 'Agent')
+  })
+
   it('appends +N when other agents are open, like Codex +1', () => {
     const activity = buildActivity({
       projectName: 'orca',

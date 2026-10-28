@@ -59,6 +59,7 @@ namespace OrcaPresence
             {
                 ProjectName = OrcaState.ProjectNameFor(active),
                 AgentType = featured?.AgentType,
+                Model = AgentModel.Find(featured?.AgentType, active.Path),
                 OpenAgentCount = OrcaState.OpenAgentCount(active),
                 AgentActive = OrcaState.HasActiveAgent(active),
                 BranchName = OrcaState.BranchNameFor(active),

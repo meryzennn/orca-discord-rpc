@@ -198,6 +198,24 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
+        public void IncognitoNamesTheModelOnTheAgentIconWhenItIsKnown()
+        {
+            var a = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "secret",
+                AgentType = "claude",
+                Model = "Claude Opus 5.5",
+                OpenAgentCount = 1,
+                AgentActive = false,
+                Incognito = true,
+                StartedAt = Started
+            });
+
+            Assert.Equal("Claude Opus 5.5", a.SmallImageText);
+            Assert.Equal("Agent: Claude · Idle", a.Details);
+        }
+
+        [Fact]
         public void IncognitoUploadedArtUsesAgentKey()
         {
             var a = Presence.BuildActivity(new PresenceInput

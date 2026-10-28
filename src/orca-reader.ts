@@ -9,6 +9,7 @@ import {
   runningAgentCount
 } from './orca-state.ts'
 import type { PresenceState } from './presence-controller.ts'
+import { findAgentModel } from './agent-model.ts'
 
 const ORCA_TIMEOUT_MS = 10_000
 
@@ -42,10 +43,12 @@ export async function readPresenceState(): Promise<PresenceState | null> {
     return null
   }
   const featured = featuredAgent(active)
+  const agentType = typeof featured?.agentType === 'string' ? featured.agentType : null
   return {
     projectName: projectNameFor(active),
     // Why the agent type and not a label: the builder owns naming and art for it.
-    agentType: typeof featured?.agentType === 'string' ? featured.agentType : null,
+    agentType,
+    model: findAgentModel(agentType, typeof active.path === 'string' ? active.path : null),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active)

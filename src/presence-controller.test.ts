@@ -81,6 +81,15 @@ describe('createPresenceController', () => {
     assert.equal(h.applied[1]?.details, 'Codex')
   })
 
+  it('applies when the model changes', async () => {
+    // Why: switching models with /model changes what the profile names.
+    const h = harness(RUNNING)
+    await h.controller.poll()
+    h.setState({ ...RUNNING, model: 'Claude Opus 5.5' })
+    await h.controller.poll()
+    assert.equal(h.applied.length, 2)
+  })
+
   it('keeps the timer when the project changes', async () => {
     const h = harness(RUNNING)
     await h.controller.poll()

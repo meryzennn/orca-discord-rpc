@@ -82,6 +82,22 @@ namespace OrcaPresence.Tests
         }
 
         [Fact]
+        public async Task AppliesWhenTheModelChanges()
+        {
+            // Why: switching models with /model changes what the profile names.
+            var h = new Harness { State = Running() };
+            var c = h.Build();
+            await c.PollAsync();
+            h.State = new PresenceState
+            {
+                ProjectName = "orca", AgentType = "claude", OpenAgentCount = 1, AgentActive = true,
+                Model = "Claude Opus 5.5"
+            };
+            await c.PollAsync();
+            Assert.Equal(2, h.Applied.Count);
+        }
+
+        [Fact]
         public async Task RetriesWhileApplyKeepsFailing()
         {
             // Why: Discord often starts after Orca, so a failure must not be remembered as sent.

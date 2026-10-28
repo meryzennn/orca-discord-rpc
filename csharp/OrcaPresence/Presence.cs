@@ -11,6 +11,9 @@ namespace OrcaPresence
         /// <summary>The agent shown on line 1: the one that most recently entered its state.</summary>
         public string? AgentType { get; set; }
 
+        /// <summary>The featured agent's model, such as "Claude Opus 5.5", when its session log names it.</summary>
+        public string? Model { get; set; }
+
         public int OpenAgentCount { get; set; }
 
         /// <summary>False when the featured agent is between turns.</summary>
@@ -139,7 +142,9 @@ namespace OrcaPresence
                         var agentName = AgentDisplayName(input.AgentType);
                         activity.SmallImageKey = agentKey;
                         activity.SmallImageUrl = agentUrl;
-                        activity.SmallImageText = "Agent: " + agentName;
+                        activity.SmallImageText = input.Model != null && input.Model.Length >= FieldMin
+                            ? Truncate(input.Model, FieldLimit)
+                            : "Agent: " + agentName;
                     }
                 }
             }

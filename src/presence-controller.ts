@@ -4,6 +4,8 @@ export type PresenceState = {
   projectName: string | null
   /** The agent shown on the first line: the one that most recently entered its state. */
   agentType: string | null
+  /** The featured agent's model, when its session log names it. */
+  model?: string | null
   runningAgentCount: number
   /** False when the featured agent is between turns. */
   agentActive: boolean
@@ -77,6 +79,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
       const key = JSON.stringify({
         project: state.projectName,
         agent: state.agentType,
+        model: state.model ?? null,
         count: state.runningAgentCount,
         active: state.agentActive,
         branch: state.branchName
@@ -89,6 +92,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
       const activity = buildActivity({
         projectName: state.projectName,
         agentType: state.agentType,
+        model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
         agentActive: state.agentActive,
         branchName: state.branchName,

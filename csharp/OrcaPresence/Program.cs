@@ -200,7 +200,8 @@ namespace OrcaPresence
                     log("state: " + (state == null
                         ? "(none)"
                         : state.ProjectName + " | agent=" + state.AgentType + " | count=" +
-                          state.OpenAgentCount + " | active=" + state.AgentActive + " | branch=" + state.BranchName));
+                          state.OpenAgentCount + " | active=" + state.AgentActive + " | branch=" + state.BranchName +
+                          " | model=" + state.Model));
                     return 0;
 
                 case "--probe-discord":

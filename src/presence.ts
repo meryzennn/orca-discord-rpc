@@ -29,6 +29,8 @@ export type PresenceInput = {
   projectName: string | null
   /** The agent shown on line 1: the one that most recently entered its state. */
   agentType: string | null
+  /** The featured agent's model, such as "Claude Opus 5.5", when its session log names it. */
+  model?: string | null
   runningAgentCount: number
   /** False when the featured agent is between turns. */
   agentActive?: boolean
@@ -105,11 +107,12 @@ export function buildActivity(input: PresenceInput): PresenceActivity {
 
   const agent = agentDisplayName(input.agentType)
   const image = agentImageUrl(input.agentType, uploaded)
+  const iconText = field(input.model?.slice(0, FIELD_LIMIT) ?? '') || 'Agent'
   const agentArt = uploaded
-    ? { largeImageKey: image ?? PRESENCE_ASSET_KEY, largeImageText: 'Agent' }
+    ? { largeImageKey: image ?? PRESENCE_ASSET_KEY, largeImageText: iconText }
     : image !== null
-      ? { largeImageUrl: image, largeImageText: 'Agent' }
-      : { largeImageKey: PRESENCE_ASSET_KEY, largeImageText: 'Agent' }
+      ? { largeImageUrl: image, largeImageText: iconText }
+      : { largeImageKey: PRESENCE_ASSET_KEY, largeImageText: iconText }
   return {
     details: field(withOtherAgents(agent, input.runningAgentCount)),
     // Why the status and not a count: "+N" on line 1 already says how many agents are open.

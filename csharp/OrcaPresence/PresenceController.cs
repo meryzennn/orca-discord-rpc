@@ -10,6 +10,9 @@ namespace OrcaPresence
         /// <summary>The agent shown on line 1: the one that most recently entered its state.</summary>
         public string? AgentType { get; set; }
 
+        /// <summary>The featured agent's model, when its session log names it.</summary>
+        public string? Model { get; set; }
+
         public int OpenAgentCount { get; set; }
 
         /// <summary>False when the featured agent is between turns.</summary>
@@ -117,6 +120,7 @@ namespace OrcaPresence
             {
                 state.ProjectName ?? "",
                 state.AgentType ?? "",
+                state.Model ?? "",
                 state.OpenAgentCount.ToString(),
                 state.AgentActive ? "1" : "0",
                 state.BranchName ?? "",
@@ -135,6 +139,7 @@ namespace OrcaPresence
             {
                 ProjectName = state.ProjectName,
                 AgentType = state.AgentType,
+                Model = state.Model,
                 OpenAgentCount = state.OpenAgentCount,
                 AgentActive = state.AgentActive,
                 BranchName = state.BranchName,
