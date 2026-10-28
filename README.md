@@ -5,7 +5,7 @@
 <img src="discord.png" width="56" alt="Discord Logo" />
 
 ### Discord Rich Presence for [Orca](https://github.com/stablyai/orca)
-Shows your active workspace and running agents directly on your Discord profile in real time.
+Shows your active Orca workspace and the agent you are working with on your Discord profile.
 
 [![Release](https://img.shields.io/github/v/release/meryzennn/orca-discord-rpc?color=5865F2&logo=github)](https://github.com/meryzennn/orca-discord-rpc/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,158 +14,164 @@ Shows your active workspace and running agents directly on your Discord profile 
 
 ---
 
-## 📸 Discord Profile Preview
+## Discord profile preview
 
 <p align="center">
-  <img src="discordprofile.png" width="450" alt="Orca Discord Profile Preview" />
+  <img src="discordprofile.png" width="450" alt="Orca activity on a Discord profile" />
 </p>
 
-> **Live Rich Presence**: Displays your featured active agent (`Claude`, `Codex`, etc.), any background agents (`+1`), the active workspace folder name, status (`Working` / `Idle`), elapsed session time, and the current git branch badge.
+This screenshot shows the layout from before v0.1.7. The first line now reads `Agent: Antigravity · Working` and the second `Folder: orca-discord-rpc`. The current layout is in [What Discord shows](#what-discord-shows).
 
 ---
 
-## ✨ What's New
+## Features
 
-- 🤖 **Agent Model on the Agent Icon**: In Incognito Mode, hovering the agent icon shows the model the agent is running, such as `Claude Opus 5.5`, instead of just `Agent: Claude`. Read from Claude Code and Codex session logs; other agents keep the old label.
-- 🚀 **Ultra-Lightweight**: Built-in working-set auto-trimming via native Win32 `SetProcessWorkingSetSize` periodically flushes unused memory pages in the background, keeping memory footprint minimal.
-- 📦 **100% Pure Portable App**: No installer and no `%LOCALAPPDATA%` file duplication. Extract `OrcaPresence.exe` anywhere and run it immediately.
-- 🔄 **Automatic Background Update Checks**: Silently checks for newer GitHub releases in the background and surfaces an update notification directly in the tray menu with a 1-click download option.
-- ⭐ **Star on GitHub Tray Button**: Quick access with a custom golden star icon right in the tray context menu to easily support the repo.
-- 🔔 **Startup & Duplicate Launch Notifications**: Informative balloon notification on startup and duplicate instance protection to prevent conflicts.
-- 🗜️ **Clean Native Zip Packaging**: Releases are cleanly packaged without `./` root paths, eliminating WinRAR extraction folder errors.
+- Shows the featured agent, how many other agents are open, the workspace folder, whether the agent is working or idle, and a session timer.
+- Adds a View Repository button that opens the workspace's `origin` remote in the browser.
+- Incognito Mode replaces the folder with `Private Project`, hides the branch and the repository button, and shows the agent's icon instead. Hovering the icon shows the model, such as `Claude Opus 5.5`.
+- Runs from any folder with no installer. The exe is never copied anywhere; only `config.json` and `tray.log` are written, to `%LOCALAPPDATA%\orca-discord-rpc`.
+- Checks GitHub for a new release 5 seconds after start, then every 30 minutes. When one exists, the tray icon gets a red dot, and one click downloads it, replaces the files and restarts the app.
+- Only one copy runs at a time. A second launch shows a message and exits, so two copies never fight over your profile.
 
 ---
 
-## ⚡ Install & Usage (Windows, C# App)
+## Install (Windows)
 
-`OrcaPresence` is fully portable and requires no installation:
+1. Download `OrcaPresence-windows.zip` from the [latest release](https://github.com/meryzennn/orca-discord-rpc/releases/latest).
+2. Extract it anywhere, for example `C:\Tools\OrcaPresence`, and double-click `OrcaPresence.exe`.
+3. The app runs in the system tray. To launch it at login, right-click the tray icon and tick Start with Windows.
 
-1. **Download**: Grab `OrcaPresence-windows.zip` from the [**Latest Releases**](https://github.com/meryzennn/orca-discord-rpc/releases/latest).
-2. **Extract & Run**: Extract the zip file anywhere (e.g., `C:\Tools\OrcaPresence` or your Desktop) and double-click `OrcaPresence.exe`.
-3. **Tray Icon**: The app runs silently in the system tray (notification area).
-4. **Auto-Start with Windows**: Right-click the tray icon and check **Start with Windows** to automatically launch it upon login.
+To uninstall, untick Start with Windows and delete the folder. Settings and logs stay in `%LOCALAPPDATA%\orca-discord-rpc` until you delete that folder as well.
 
-To uninstall, simply uncheck **Start with Windows** and delete the application folder.
+### Command line
 
-### Optional CLI Commands
-
-You can also manage auto-start directly from PowerShell or Command Prompt:
+Autostart can also be set from PowerShell or Command Prompt:
 
 ```sh
-OrcaPresence.exe autostart enable    # Enables auto-start on Windows login for this executable
-OrcaPresence.exe autostart disable   # Disables auto-start
-OrcaPresence.exe autostart status    # Shows whether autostart is currently enabled
+OrcaPresence.exe autostart enable    # start at login, pointing at this exe
+OrcaPresence.exe autostart disable   # stop starting at login
+OrcaPresence.exe autostart status    # show the current entry
 ```
 
-*No administrative privileges required: configuration is stored in the user's `HKEY_CURRENT_USER` registry hive.*
-
-> **Single Instance**: Only one copy may run at a time. A second launch displays a notification and exits immediately, preventing conflicting updates to your Discord profile.
+The entry lives under `HKEY_CURRENT_USER`, so no administrator rights are needed.
 
 ---
 
-## 📋 Requirements
+## Requirements
 
-- **Orca installed**, with the `orca` CLI resolvable on `PATH`
-- **Discord desktop client running and logged in** — the web browser version of Discord does not expose the local IPC socket required for Rich Presence.
-- **Windows**: The C# app targets .NET Framework 4.8 (pre-installed on Windows 10/11) with zero runtime dependencies.
-- *(Optional)* **Node.js 24+**: Only required if running the headless Node daemon on macOS / Linux.
+- Orca, with the `orca` CLI on `PATH`.
+- The Discord desktop app, running and logged in. Discord in a browser has no local IPC socket, so it cannot show Rich Presence.
+- Windows 10 or 11. The app runs on .NET Framework 4.8, which ships with Windows 10 (May 2019 Update and later) and Windows 11, so there is nothing else to install.
+- Node.js 24+, only if you run the headless daemon on macOS or Linux.
 
 ---
 
-## 🔍 What Discord Shows
+## What Discord shows
 
-| Field | Content |
+| Field | Normal | Incognito |
+| --- | --- | --- |
+| Line 1 | `Agent: Claude +1 · Working` | Same |
+| Line 2 | `Folder: orca-discord-rpc` | `Folder: Private Project` |
+| Timer | Time since the session started | Same |
+| Small icon | Branch icon; hovering shows the branch name | Agent icon; hovering shows the model, such as `Claude Opus 5.5` |
+| Button | View Repository, when the workspace has an `origin` remote | None |
+
+With no agent open, line 1 reads `Using Orca` and line 2 shows the folder.
+
+How each value is chosen:
+
+- The featured agent is the one that most recently changed state. A working agent wins over an idle one, so the busier session is the one people see. `+1` counts the other open agent panes.
+- The folder comes from the workspace path. A workspace you renamed in Orca keeps its name.
+- Orca does not report which model an agent runs, so the app reads it from the agent's own session log: Claude Code from `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`), Codex from `%USERPROFILE%\.codex\sessions` (or `CODEX_HOME`). When two sessions share one workspace, the one that wrote most recently wins. Other agents, or a missing log, fall back to `Agent: <name>`.
+- The timer keeps running when you switch workspace or agent, and resets when Orca closes or no workspace is active.
+
+---
+
+## Tray menu
+
+Right-click the tray icon. The second row shows the current status:
+
+| Status row | Meaning |
 | --- | --- |
-| Line 1 | The featured agent, plus `+N` when other agent panes are open — `Claude +1` |
-| Line 2 | The workspace folder, then `Working` or `Idle` |
-| Timer | Elapsed session time (continues across workspaces and agents) |
-| Small image | A branch icon; its tooltip is the branch name |
-| Small image (Incognito) | The agent icon; its tooltip is the model, such as `Claude Opus 5.5` |
+| `Agent: Claude · Working` | Everything works; this is what your profile shows |
+| `Using Orca` | Orca is open but no agent is running |
+| `Discord not detected` | Orca is open but Discord is not; a Reconnect to Discord row appears |
+| `Orca is not running` | Waiting for Orca to open |
+| `Presence paused` | You turned presence off; choose Enable presence to turn it back on |
+| `Problem` | The last update failed; the tray tooltip names the reason |
 
-- **Featured Agent**: The agent that most recently entered its state — opening Codex shows `Codex`, and its name stays there while waiting between turns. An active working agent takes precedence over an idle agent. `+N` counts every agent whose pane is open.
-- **Folder**: The active workspace folder name taken from the Orca workspace path.
-- **Branch**: Displays the git branch name in the small badge tooltip.
-- **Model**: Orca does not report which model an agent runs, so the app reads it from the agent's own session log: Claude Code from `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`), Codex from `%USERPROFILE%\.codex\sessions` (or `CODEX_HOME`). When two sessions share one workspace, the one that wrote most recently wins. Other agents, or a missing log, fall back to `Agent: <name>`.
+The other rows, top to bottom:
 
----
-
-## 🖱️ Tray Menu
-
-Right-click the system tray icon to view status and controls:
-
-| Row | Meaning |
-| --- | --- |
-| `Claude` | Healthy — current agent displayed on profile |
-| `Discord not detected` | Orca is open, Discord is not; a **Reconnect** button appears |
-| `Orca is not running` | Waiting for Orca to launch |
-| `Presence paused` | Presence is temporarily paused; click **Enable presence** to resume |
-| `Problem` | Displays error reason if the last update failed |
-| ⭐ **Star on GitHub** | Opens the project repository in your default browser |
-| 🔄 **Download Update (vX.Y.Z)** | Appears automatically when a newer version is available |
-
-The tray menu also allows you to toggle **Start with Windows**, toggle presence, reconnect to Discord, and view the active Application ID.
+- Update to vX.Y.Z (Click to auto-update), only when a new release is waiting
+- Disable presence, or Enable presence while paused
+- Application id, for reference
+- Incognito Mode
+- Start with Windows
+- Check for updates..., when no update is waiting
+- Star on GitHub, which opens this repository
+- Quit
 
 ---
 
-## 📊 Size & Performance
+## Size and memory
 
-The C# WinForms app is drastically smaller and lighter than typical Electron-based RPC tools:
-
-| Metric | C# App (`OrcaPresence`) | Headless Node | Electron (Retired) |
+| | Tray app (C#) | Headless daemon (Node) | Electron app (retired) |
 | --- | --- | --- | --- |
-| **Download / Published Size** | **~1.7 MB** (single exe: 580 KB) | ~25 MB (`node_modules`) | 106 MB installer |
-| **RAM Usage** | **Lightweight** (auto-trimmed) | Moderate | Heavy (~200+ MB) |
-| **Background Processes** | **1** | 1 | 3 |
+| Download | 1.7 MB folder, 611 KB exe | 36 MB `node_modules`, dev tools included | 106 MB installer |
+| Memory | 13.8 MB working set, 34 MB private | Not measured | 224 MB |
+| Processes | 1 | 1 | 3 |
 
-*Working-set auto-trimming periodically flushes unneeded pages back to the OS in the background to maintain a minimal memory footprint.*
+The tray app's memory was measured with `Get-Process` on one machine on 2026-10-11. Every 5 minutes the app calls `SetProcessWorkingSetSize`, which lowers the working set Task Manager shows; the private memory it holds stays the same.
 
 ---
 
-## 🎨 Custom Artwork & Configuration
+## Configuration
 
-A default Discord Application ID is pre-configured out of the box. To customize your own Discord app ID or registered art:
+The app works with no setup, because a Discord application id is built in. To use your own application, uploaded art, or Incognito by default, set environment variables:
 
 ```sh
 setx ORCA_DISCORD_CLIENT_ID "123456789012345678"
 setx ORCA_DISCORD_UPLOADED_ART "1"
+setx ORCA_DISCORD_INCOGNITO "1"
 ```
 
-Or via JSON config file (`%LOCALAPPDATA%\orca-discord-rpc\config.json`):
+or edit `%LOCALAPPDATA%\orca-discord-rpc\config.json`:
 
 ```json
 {
   "clientId": "123456789012345678",
   "pollMs": 15000,
-  "useUploadedArt": true
+  "useUploadedArt": true,
+  "incognito": false
 }
 ```
 
-`pollMs` is clamped to at least 5 seconds. The default 15 s stays well inside Discord's rate limit of roughly 5 updates per 20 seconds.
+Environment variables win over the file. The Incognito Mode row in the tray menu writes `incognito` to this file. A `pollMs` under 5000 is ignored and the 15 second default is used instead, which stays inside Discord's limit of about 5 updates per 20 seconds.
 
 ---
 
-## 🛠️ Build & Development
+## Build and development
 
-### Building the C# App
+### Windows tray app
 
 ```sh
-npm run build:csharp                    # Generates icons and publishes to dist-csharp
-npm run pack:csharp                     # Compiles and packs clean OrcaPresence-windows.zip
-dotnet test csharp/OrcaPresence.Tests   # 100 unit tests
+npm run build:csharp                    # build the icon and publish to dist-csharp
+npm run pack:csharp                     # zip dist-csharp into OrcaPresence-windows.zip
+dotnet test csharp/OrcaPresence.Tests   # run the tests
 ```
 
-### Running the Headless Daemon (macOS / Linux / Scripted)
+### Headless daemon (macOS, Linux, or scripted use)
 
 ```sh
 npm install
-npm start          # Starts daemon, logging to daemon.log
-npm test           # Runs node --test suite (125 tests)
+npm start          # start the daemon, logging to daemon.log
+npm test           # run the tests
 npm run typecheck
 ```
 
 ---
 
-## ⚙️ How It Works
+## How it works
 
 ```
 orca worktree ps --json ──► parse ──► select the active worktree
@@ -175,13 +181,13 @@ orca worktree ps --json ──► parse ──► select the active worktree
                  hand-rolled Discord IPC ──► the local named pipe
 ```
 
-- **IPC Named Pipe**: The C# app speaks directly to Discord's local Windows named pipe (`\\.\pipe\discord-ipc-0`) with zero external Discord SDK dependencies.
-- **Smart Polling**: Polls Orca CLI on a configurable timer (default 15s). Discord updates are sent only when payload changes, respecting rate limits.
-- **Auto Recovery**: Automatically reconnects when Discord or Orca restarts.
-- **Quiet Failures**: Diagnostics are written to `tray.log` (C# app) or `daemon.log` (CLI).
+- The tray app talks to Discord over its local named pipe, `\\.\pipe\discord-ipc-0`, without a Discord SDK.
+- It runs `orca worktree ps --json` every 15 seconds by default, and sends Discord an update only when what it would show has changed.
+- When Discord or Orca restarts, the next poll reconnects and sends the current state again.
+- Errors go to `tray.log` (tray app) or `daemon.log` (daemon) instead of popping up.
 
 ---
 
-## 📄 License
+## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
