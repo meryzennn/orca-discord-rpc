@@ -16,9 +16,9 @@ You need **Orca 1.4.250 or newer** and the Discord desktop app, running and logg
 
 The worker requests `workspace:read`, `agent:read`, and `settings:own`. It reads workspace information and local agent session files, then sends presence updates to Discord.
 
-Keep `#main` in the URL. Without a reference, Orca chooses the latest version tag, currently `v0.1.9`, which does not contain the plugin manifest. The plugin is available from `main`; the [v0.1.9 release ZIP](https://github.com/meryzennn/orca-discord-rpc/releases/tag/v0.1.9) contains the standalone Windows app.
+Keep `#main` in the URL to track the latest plugin updates from the main branch.
 
-If you are switching from an older provider, stop it first. Disable the old development plugin, quit the Windows tray app, or stop the headless daemon. For the tray app, also untick **Start with Windows**. Keep one presence provider running at a time.
+If you are switching from an older provider, stop it first. Disable any older development plugin, quit any legacy tray app, or stop the headless daemon. Keep one presence provider running at a time.
 
 ## Use
 
