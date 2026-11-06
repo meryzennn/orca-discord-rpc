@@ -35,7 +35,9 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
   const destroyTransport = async (): Promise<void> => {
     try { await options.transport.destroy() }
     catch {
-      throw new Error(options.transport.lastError?.() ?? 'Discord RPC destroy failed (code: unknown)')
+      const message = options.transport.lastError?.() ?? 'Discord RPC destroy failed (code: unknown)'
+      if (!closed) publish({ ...runtime.getStatus(), lastError: message })
+      throw new Error(message)
     }
   }
   const serial = (operation: () => Promise<void>): Promise<void> => {

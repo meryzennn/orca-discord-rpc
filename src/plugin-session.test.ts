@@ -394,3 +394,37 @@ it('surfaces an RPC failure in plugin logs/status and clears it on recovery', as
   assert.equal(h.statuses.at(-1)?.discordConnected, true)
   await h.session.stop()
 })
+
+it('publishes the safe teardown error without sending the private activity', async () => {
+  let fail = false
+  const sent: PresenceActivity[] = []
+  const statuses: PresenceRuntimeStatus[] = []
+  const logs: string[] = []
+  const transport = createDiscordPresence(DEFAULT_CLIENT_ID, () => ({
+    on: () => {}, login: async () => {},
+    destroy: async () => {
+      if (fail) throw Object.assign(new Error('secret-project secret-branch'), { code: 'EPIPE' })
+    },
+    user: {
+      setActivity: async activity => { sent.push(activity) },
+      clearActivity: async () => {}
+    }
+  }))
+  const session = createPluginSession({
+    config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
+    enabled: true, incognito: false, readState: async () => state,
+    transport, onStatus: status => { statuses.push(status) }, log: message => { logs.push(message) },
+    scheduleInterval: () => () => {}
+  })
+  try {
+    await session.refresh()
+    fail = true
+    await assert.rejects(session.setIncognito(true), /Discord RPC destroy failed \(code: EPIPE\)/)
+    assert.equal(statuses.at(-1)?.lastError, 'Discord RPC destroy failed (code: EPIPE)')
+    assert.equal(statuses.at(-1)?.discordConnected, false)
+    await session.refresh()
+    assert.equal(sent.length, 1)
+    assert.ok(logs.includes('Discord RPC destroy failed (code: EPIPE)'))
+    assert.ok(!logs.some(line => line.includes('secret-branch')))
+  } finally { fail = false; await session.stop() }
+})
