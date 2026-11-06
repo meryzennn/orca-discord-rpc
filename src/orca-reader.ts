@@ -19,12 +19,18 @@ const ORCA_TIMEOUT_MS = 10_000
  */
 const ORCA_COMMAND = process.platform === 'win32' ? 'orca.exe' : 'orca'
 
-export function runOrcaWorktreePs(): Promise<string> {
+export function runOrcaWorktreePs(command: string = ORCA_COMMAND, nodeEntry?: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
-      ORCA_COMMAND,
-      ['worktree', 'ps', '--json'],
-      { timeout: ORCA_TIMEOUT_MS, windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
+      command,
+      [...(nodeEntry ? [nodeEntry] : []), 'worktree', 'ps', '--json'],
+      {
+        timeout: ORCA_TIMEOUT_MS,
+        windowsHide: true,
+        maxBuffer: 8 * 1024 * 1024,
+        signal,
+        env: nodeEntry ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' } : process.env
+      },
       (error, stdout) => {
         if (error) {
           reject(error)
@@ -36,8 +42,10 @@ export function runOrcaWorktreePs(): Promise<string> {
   })
 }
 
-export async function readPresenceState(): Promise<PresenceState | null> {
-  const worktrees = parseWorktreePs(await runOrcaWorktreePs())
+export async function readPresenceState(
+  runWorktreePs: () => Promise<string> = runOrcaWorktreePs
+): Promise<PresenceState | null> {
+  const worktrees = parseWorktreePs(await runWorktreePs())
   const active = selectActiveWorktree(worktrees)
   if (!active) {
     return null
