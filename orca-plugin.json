@@ -4,7 +4,7 @@
   "execution": "trusted-worker",
   "id": "discord-presence",
   "name": "Discord Rich Presence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Show your active Orca workspace and agent on Discord while Orca is open.",
   "license": "MIT",
   "repository": "https://github.com/meryzennn/orca-discord-rpc",

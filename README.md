@@ -22,7 +22,7 @@ You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged 
 
 1. Open Settings > Plugins in Orca and turn on plugins if needed.
 2. Click Add Plugin and choose a Git source.
-3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.0`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
+3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.1`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
 4. Check that Orca resolves the tag you entered.
 5. Read Orca's worker access prompt, approve it, and enable the plugin.
 
@@ -159,7 +159,7 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 
 | Problem | Check |
 | --- | --- |
-| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.0` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
+| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.1` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
 | No activity | Open an active Orca workspace and check Discord's activity visibility settings. |
