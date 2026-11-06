@@ -1,8 +1,8 @@
-import { describe, it } from 'node:test'
+import { describe, it, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDiscordPresence } from './discord.ts'
 import type { PresenceActivity } from './presence.ts'
-import { ClientUser } from '@xhayper/discord-rpc'
+import { Client, ClientUser } from '@xhayper/discord-rpc'
 
 const activity: PresenceActivity = {
   details: 'Claude',
@@ -283,4 +283,42 @@ it('does not acknowledge clearing an owned client whose user is unavailable', as
   assert.equal(await presence.clear(), false)
   await presence.destroy()
   assert.equal(destroyed, 1)
+})
+
+it('releases unused SDK REST timers for successful and failed connection attempts', async () => {
+  const timers = new Set<ReturnType<typeof setInterval>>()
+  const originalSet = globalThis.setInterval
+  const originalClear = globalThis.clearInterval
+  const set = mock.method(globalThis, 'setInterval', (callback: () => void, delay?: number) => {
+    const timer = originalSet(callback, delay)
+    timers.add(timer)
+    return timer
+  })
+  const clear = mock.method(globalThis, 'clearInterval', (timer: Parameters<typeof clearInterval>[0]) => {
+    if (timer && typeof timer === 'object') timers.delete(timer)
+    originalClear(timer)
+  })
+  let fail = false
+  const presence = createDiscordPresence('1', () => {
+    const client = new Client({ clientId: '1' })
+    assert.equal(timers.size, 2, 'The real SDK creates two REST sweepers')
+    client.login = async () => { if (fail) throw new Error('EPIPE') }
+    Object.defineProperty(client, 'user', { value: {
+      setActivity: async () => ({}), clearActivity: async () => {}
+    } })
+    return client
+  })
+  try {
+    assert.equal(await presence.apply(activity), true)
+    assert.equal(timers.size, 0, 'IPC presence must not leave REST timers alive')
+    await presence.destroy()
+    fail = true
+    assert.equal(await presence.apply(activity), false)
+    assert.equal(timers.size, 0, 'Failed login candidates must release their REST timers too')
+  } finally {
+    await presence.destroy()
+    for (const timer of timers) originalClear(timer)
+    set.mock.restore()
+    clear.mock.restore()
+  }
 })

@@ -75,6 +75,12 @@ export function createDiscordPresence(
     const next = createClient(clientId)
     client = next
     visible = false
+    // shortcut: SDK 1.5.1 keeps REST private; drop this when SDK teardown clears its unused timers.
+    const rest: unknown = Object.getOwnPropertyDescriptor(next, 'rest')?.value
+    if (rest !== null && typeof rest === 'object') {
+      if ('clearHashSweeper' in rest && typeof rest.clearHashSweeper === 'function') rest.clearHashSweeper()
+      if ('clearHandlerSweeper' in rest && typeof rest.clearHandlerSweeper === 'function') rest.clearHandlerSweeper()
+    }
     next.on('disconnected', () => {
       if (client !== next) return
       connected = false
