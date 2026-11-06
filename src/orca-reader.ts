@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import { homedir } from 'node:os'
+import { win32 } from 'node:path'
 import {
   parseWorktreePs,
   selectActiveWorktree,
@@ -19,6 +21,17 @@ const ORCA_TIMEOUT_MS = 10_000
  */
 const ORCA_COMMAND = process.platform === 'win32' ? 'orca.exe' : 'orca'
 
+export function pluginCliEnv(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, userHome: string): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    ELECTRON_RUN_AS_NODE: '1',
+    // Orca's Windows CLI needs this known folder to find its runtime metadata.
+    ...(platform === 'win32' && env.APPDATA === undefined
+      ? { APPDATA: win32.join(userHome, 'AppData', 'Roaming') }
+      : {})
+  }
+}
+
 export function runOrcaWorktreePs(command: string = ORCA_COMMAND, nodeEntry?: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -29,10 +42,19 @@ export function runOrcaWorktreePs(command: string = ORCA_COMMAND, nodeEntry?: st
         windowsHide: true,
         maxBuffer: 8 * 1024 * 1024,
         signal,
-        env: nodeEntry ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' } : process.env
+        env: nodeEntry ? pluginCliEnv(process.env, process.platform, homedir()) : process.env
       },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (error) {
+          let cliMessage = ''
+          try {
+            const response = JSON.parse(stdout)
+            if (response?.ok === false && typeof response.error?.message === 'string') {
+              cliMessage = response.error.message.trim()
+            }
+          } catch {}
+          const diagnostics = [cliMessage, stderr.trim()].filter(message => message && !error.message.includes(message))
+          if (diagnostics.length) error.message += `\n${diagnostics.join('\n')}`
           reject(error)
           return
         }

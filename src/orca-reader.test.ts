@@ -6,13 +6,36 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
-import { readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
+import { pluginCliEnv, readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
+
+it('fills only the missing Windows plugin APPDATA known folder without mutating input', () => {
+  const env = Object.freeze({ PATH: 'worker-path', ELECTRON_RUN_AS_NODE: '0' })
+  assert.deepEqual(pluginCliEnv(env, 'win32', 'C:\\Users\\worker'), {
+    PATH: 'worker-path', ELECTRON_RUN_AS_NODE: '1', APPDATA: 'C:\\Users\\worker\\AppData\\Roaming'
+  })
+  assert.deepEqual(env, { PATH: 'worker-path', ELECTRON_RUN_AS_NODE: '0' })
+})
+
+it('preserves supplied APPDATA and POSIX plugin environments', () => {
+  const supplied = Object.freeze({ APPDATA: 'D:/custom/roaming', OTHER: 'preserved' })
+  assert.deepEqual(pluginCliEnv(supplied, 'win32', 'C:\\Users\\worker'), {
+    APPDATA: 'D:/custom/roaming', OTHER: 'preserved', ELECTRON_RUN_AS_NODE: '1'
+  })
+  for (const platform of ['linux', 'darwin'] as const) {
+    assert.deepEqual(pluginCliEnv({ HOME: '/users/worker' }, platform, '/users/worker'), {
+      HOME: '/users/worker', ELECTRON_RUN_AS_NODE: '1'
+    })
+    assert.deepEqual(pluginCliEnv(supplied, platform, '/users/worker'), {
+      APPDATA: 'D:/custom/roaming', OTHER: 'preserved', ELECTRON_RUN_AS_NODE: '1'
+    })
+  }
+})
 
 it('uses the injected snapshot through the existing workspace rules', async () => {
   // Prevent the pre-fix reader from invoking a live Orca installation.
   const stub = mock.method(childProcess, 'execFile', (...args: unknown[]) => {
-    const callback = args.at(-1) as (error: Error | null, stdout: string) => void
-    callback(null, JSON.stringify({ ok: true, result: { worktrees: [] } }))
+    const callback = args.at(-1) as (error: Error | null, stdout: string, stderr: string) => void
+    callback(null, JSON.stringify({ ok: true, result: { worktrees: [] } }), '')
   })
   syncBuiltinESMExports()
   try {
@@ -46,8 +69,8 @@ it('keeps standalone executable argv and forwards child failures', async () => {
   const failure = new Error('child failed')
   const stub = mock.method(childProcess, 'execFile', (...args: unknown[]) => {
     calls.push(args)
-    const callback = args.at(-1) as (error: Error | null, stdout: string) => void
-    callback(calls.length === 3 ? failure : null, 'snapshot')
+    const callback = args.at(-1) as (error: Error | null, stdout: string, stderr: string) => void
+    callback(calls.length === 3 ? failure : null, 'snapshot', '')
   })
   syncBuiltinESMExports()
   try {
@@ -61,6 +84,58 @@ it('keeps standalone executable argv and forwards child failures', async () => {
       timeout: 10_000, windowsHide: true, maxBuffer: 8 * 1024 * 1024,
       signal: undefined, env: process.env
     })
+  } finally {
+    stub.mock.restore()
+    syncBuiltinESMExports()
+  }
+})
+
+it('adds structured CLI failure and stderr diagnostics without replacing the child error', async () => {
+  const failure = Object.assign(new Error('Command failed'), { code: 1, signal: 'SIGTERM' })
+  const stub = mock.method(childProcess, 'execFile', (...args: unknown[]) => {
+    const callback = args.at(-1) as (error: Error, stdout: string, stderr: string) => void
+    callback(failure, JSON.stringify({
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'APPDATA is not set, so the Orca runtime metadata path cannot be resolved.' }
+    }), 'runtime discovery failed\n')
+  })
+  syncBuiltinESMExports()
+  try {
+    await assert.rejects(runOrcaWorktreePs('missing runtime'), error => {
+      assert.equal(error, failure)
+      assert.equal(failure.code, 1)
+      assert.equal(failure.signal, 'SIGTERM')
+      assert.equal(failure.message, 'Command failed\nAPPDATA is not set, so the Orca runtime metadata path cannot be resolved.\nruntime discovery failed')
+      return true
+    })
+  } finally {
+    stub.mock.restore()
+    syncBuiltinESMExports()
+  }
+})
+
+it('does not include worktree payloads or malformed stdout in child failure diagnostics', async () => {
+  const outputs = [
+    JSON.stringify({ ok: true, result: { worktrees: [{ path: 'secret-project' }] } }),
+    'not JSON: secret-project',
+    JSON.stringify({ ok: false, error: { message: { path: 'secret-project' } } })
+  ]
+  const failures: Error[] = []
+  const stub = mock.method(childProcess, 'execFile', (...args: unknown[]) => {
+    const failure = new Error('Command failed\nexisting stderr')
+    failures.push(failure)
+    const callback = args.at(-1) as (error: Error, stdout: string, stderr: string) => void
+    callback(failure, outputs.shift()!, 'existing stderr\n')
+  })
+  syncBuiltinESMExports()
+  try {
+    for (let index = 0; index < 3; index += 1) {
+      await assert.rejects(runOrcaWorktreePs('failing CLI'), error => {
+        assert.equal(error, failures[index])
+        assert.equal(failures[index]?.message, 'Command failed\nexisting stderr')
+        return true
+      })
+    }
   } finally {
     stub.mock.restore()
     syncBuiltinESMExports()
@@ -88,7 +163,7 @@ it('aborts an outstanding CLI child and rejects with AbortError', async () => {
     const ready = join(directory, 'pid')
     await writeFile(entry, `require('node:fs').writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setInterval(() => {}, 1000)`)
     const running = runOrcaWorktreePs(process.execPath, entry, controller.signal)
-    const rejected = assert.rejects(running, { name: 'AbortError' })
+    const rejected = assert.rejects(running, { name: 'AbortError', code: 'ABORT_ERR' })
     let pid = 0
     for (let attempt = 0; attempt < 500 && !pid; attempt += 1) {
       pid = Number(await readFile(ready, 'utf8').catch(() => ''))

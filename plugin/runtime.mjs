@@ -31466,6 +31466,8 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
 
 // src/orca-reader.ts
 import { execFile } from "node:child_process";
+import { homedir as homedir3 } from "node:os";
+import { win32 } from "node:path";
 
 // src/orca-state.ts
 var LIVE_AGENT_STATES = /* @__PURE__ */ new Set(["working", "blocked", "waiting"]);
@@ -31709,6 +31711,14 @@ function readSlice(path, end, bytes) {
 // src/orca-reader.ts
 var ORCA_TIMEOUT_MS = 1e4;
 var ORCA_COMMAND = process.platform === "win32" ? "orca.exe" : "orca";
+function pluginCliEnv(env, platform2, userHome) {
+  return {
+    ...env,
+    ELECTRON_RUN_AS_NODE: "1",
+    // Orca's Windows CLI needs this known folder to find its runtime metadata.
+    ...platform2 === "win32" && env.APPDATA === void 0 ? { APPDATA: win32.join(userHome, "AppData", "Roaming") } : {}
+  };
+}
 function runOrcaWorktreePs(command = ORCA_COMMAND, nodeEntry, signal) {
   return new Promise((resolve, reject) => {
     execFile(
@@ -31719,10 +31729,21 @@ function runOrcaWorktreePs(command = ORCA_COMMAND, nodeEntry, signal) {
         windowsHide: true,
         maxBuffer: 8 * 1024 * 1024,
         signal,
-        env: nodeEntry ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" } : process.env
+        env: nodeEntry ? pluginCliEnv(process.env, process.platform, homedir3()) : process.env
       },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (error) {
+          let cliMessage = "";
+          try {
+            const response = JSON.parse(stdout);
+            if (response?.ok === false && typeof response.error?.message === "string") {
+              cliMessage = response.error.message.trim();
+            }
+          } catch {
+          }
+          const diagnostics = [cliMessage, stderr.trim()].filter((message) => message && !error.message.includes(message));
+          if (diagnostics.length) error.message += `
+${diagnostics.join("\n")}`;
           reject(error);
           return;
         }
@@ -32233,9 +32254,9 @@ function createPluginSession(options) {
 
 // src/plugin-platform.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { win32, posix } from "node:path";
+import { win32 as win322, posix } from "node:path";
 function resolveBundledCliEntry(executable, platform2, exists = existsSync2) {
-  const path = platform2 === "win32" ? win32 : posix;
+  const path = platform2 === "win32" ? win322 : posix;
   let resources;
   if (platform2 === "darwin") {
     const components = executable.split("/");
