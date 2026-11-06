@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { Client } from '@xhayper/discord-rpc'
+import { createDiscordIpcClient } from './discord-ipc.ts'
 import { loadConfig, type ConfigFile } from './config.ts'
 import { configPath } from './paths.ts'
 import { createDiscordPresence } from './discord.ts'
@@ -149,9 +149,7 @@ export default async function activate(orca: PluginApi): Promise<void> {
     readState: () => readPresenceState(
       () => runOrcaWorktreePs(process.execPath, cliEntry, signal), path => readRepoUrl(path, signal)
     ),
-    transport: createDiscordPresence(config.clientId, clientId => new Client({
-      clientId, transport: { type: 'ipc', pathList: paths }
-    }))
+    transport: createDiscordPresence(config.clientId, clientId => createDiscordIpcClient(clientId, paths))
   }))
   lifecycle = current
   await current.activate()

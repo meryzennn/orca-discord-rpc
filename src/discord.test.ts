@@ -1,8 +1,7 @@
-import { describe, it, mock } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDiscordPresence } from './discord.ts'
 import type { PresenceActivity } from './presence.ts'
-import { Client, ClientUser } from '@xhayper/discord-rpc'
 
 const activity: PresenceActivity = {
   details: 'Claude',
@@ -10,30 +9,23 @@ const activity: PresenceActivity = {
   startTimestamp: new Date('2026-10-05T00:00:00.000Z')
 }
 
-it('serializes project fallback image sources as SDK image assets, with keys taking precedence', async () => {
-  const requests: { activity: { assets: Record<string, string>; buttons?: unknown } }[] = []
-  const client = {
-    request: async (_command: string, args: typeof requests[number]) => {
-      requests.push(args)
-      return { data: {} }
-    }
-  }
-  const user = new ClientUser(client as never, { id: '1' } as never)
-  const presence = createDiscordPresence('1', () => ({
-    on: () => {}, login: async () => {}, destroy: async () => {}, user
-  }))
+it('normalizes fallback image references without replacing explicit keys or changing the input', async () => {
+  const fake = fakeClient()
+  const presence = createDiscordPresence('1', () => fake.client)
   const buttons = [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
   const fallback = {
     ...activity, largeImageUrl: 'https://example.com/large.png',
     smallImageUrl: 'https://example.com/small.png', buttons
   }
   assert.equal(await presence.apply(fallback), true)
-  assert.deepEqual(requests[0]?.activity.assets, {
-    large_image: 'https://example.com/large.png', small_image: 'https://example.com/small.png'
-  })
-  assert.deepEqual(requests[0]?.activity.buttons, buttons)
+  assert.equal(fake.sent[0]?.largeImageKey, 'https://example.com/large.png')
+  assert.equal(fake.sent[0]?.smallImageKey, 'https://example.com/small.png')
+  assert.equal(fake.sent[0]?.largeImageUrl, undefined)
+  assert.equal(fake.sent[0]?.smallImageUrl, undefined)
+  assert.deepEqual(fake.sent[0]?.buttons, buttons)
   assert.equal(await presence.apply({ ...fallback, largeImageKey: 'orca', smallImageKey: 'git-branch' }), true)
-  assert.deepEqual(requests[1]?.activity.assets, { large_image: 'orca', small_image: 'git-branch' })
+  assert.equal(fake.sent[1]?.largeImageKey, 'orca')
+  assert.equal(fake.sent[1]?.smallImageKey, 'git-branch')
   assert.equal(fallback.largeImageUrl, 'https://example.com/large.png')
   await presence.destroy()
 })
@@ -283,42 +275,4 @@ it('does not acknowledge clearing an owned client whose user is unavailable', as
   assert.equal(await presence.clear(), false)
   await presence.destroy()
   assert.equal(destroyed, 1)
-})
-
-it('releases unused SDK REST timers for successful and failed connection attempts', async () => {
-  const timers = new Set<ReturnType<typeof setInterval>>()
-  const originalSet = globalThis.setInterval
-  const originalClear = globalThis.clearInterval
-  const set = mock.method(globalThis, 'setInterval', (callback: () => void, delay?: number) => {
-    const timer = originalSet(callback, delay)
-    timers.add(timer)
-    return timer
-  })
-  const clear = mock.method(globalThis, 'clearInterval', (timer: Parameters<typeof clearInterval>[0]) => {
-    if (timer && typeof timer === 'object') timers.delete(timer)
-    originalClear(timer)
-  })
-  let fail = false
-  const presence = createDiscordPresence('1', () => {
-    const client = new Client({ clientId: '1' })
-    assert.equal(timers.size, 2, 'The real SDK creates two REST sweepers')
-    client.login = async () => { if (fail) throw new Error('EPIPE') }
-    Object.defineProperty(client, 'user', { value: {
-      setActivity: async () => ({}), clearActivity: async () => {}
-    } })
-    return client
-  })
-  try {
-    assert.equal(await presence.apply(activity), true)
-    assert.equal(timers.size, 0, 'IPC presence must not leave REST timers alive')
-    await presence.destroy()
-    fail = true
-    assert.equal(await presence.apply(activity), false)
-    assert.equal(timers.size, 0, 'Failed login candidates must release their REST timers too')
-  } finally {
-    await presence.destroy()
-    for (const timer of timers) originalClear(timer)
-    set.mock.restore()
-    clear.mock.restore()
-  }
 })

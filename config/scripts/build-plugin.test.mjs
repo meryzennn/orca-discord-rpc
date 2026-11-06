@@ -28,11 +28,5 @@ it('builds a worker that imports outside the repo without node_modules', async (
     })
     assert.equal(output.trim(), 'worker import ok')
     assert.doesNotMatch(readFileSync(bundle, 'utf8'), /[ \t]+\r?$/m)
-    const notices = readFileSync(join(directory, 'THIRD-PARTY-NOTICES.txt'), 'utf8')
-    assert.match(notices, /@xhayper\/discord-rpc/)
-    assert.match(notices, /@sapphire\/async-queue@1\.5\.5/)
-    assert.match(notices, /@sapphire\/snowflake@3\.5\.5/)
-    assert.match(notices, /The Sapphire Community and its contributors/)
-    assert.match(notices, /Copyright Node\.js contributors\. All rights reserved\./)
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })

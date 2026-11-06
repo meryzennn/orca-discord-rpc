@@ -106,24 +106,20 @@ OMP lookup uses the standard `~/.omp/agent/sessions` layout. Custom profiles, cu
 
 ## RAM and CPU
 
-One 30-second sample of the running plugin worker on Windows, measured on 2026-11-06 with a Ryzen 5 5500 and 12 logical CPUs:
+The current plugin uses Node built-ins for Discord IPC and has no npm runtime dependencies. A controlled comparison on Windows used the same Orca executable, a Ryzen 5 5500, and 12 logical CPUs. Both bundles were imported into isolated workers with presence paused, without Discord connections or workspace polling:
 
-| Metric | Measured value |
-| --- | --- |
-| RAM working set | 135.6 to 137.0 MiB |
-| Private bytes | 41.3 to 43.0 MiB |
-| Average CPU | 0.056% of total CPU capacity |
-| Highest one-second CPU sample | 0.369% |
+| Metric | Previous SDK bundle | Minimal IPC bundle |
+| --- | --- | --- |
+| Bundle size | 1,400,511 bytes | 52,927 bytes |
+| Total working set | 136.5 MiB | 123.4 MiB |
+| Private bytes | 42.1 MiB | 28.9 MiB |
+| Private working set | 31.5 MiB | 19.5 MiB |
 
-These measurements cover the permanent plugin worker. They exclude Orca, Discord, and the short-lived CLI processes used for polling. Usage varies with workload and machine.
+The empty host worker in the same run used 125.2 MiB total working set, 31.0 MiB private bytes, and 21.3 MiB private working set. Startup and garbage collection vary between processes; these observations are not a hard memory floor or a promise about every machine.
 
-Working set includes shared runtime pages. Private bytes measure memory committed to the process. The older Windows tray app periodically trims its working set, so its low Task Manager reading is a different comparison. This plugin still runs in Orca's Node worker.
+Total working set includes shared runtime pages. Private bytes are committed memory; private working set counts resident pages exclusive to the process. The total should not be read as entirely additional, unique RAM.
 
-A later Windows counter sample reported 32.6 MiB of private working set for the live worker. This measures resident pages exclusive to that process, excluding shared pages. It is a different metric from both total working set and committed private bytes; the 137 MiB figure should not be read as entirely additional, unique RAM.
-
-A separate isolated benchmark on the same machine measured an initialized empty Orca worker at 121.4 MiB working set and 27.1 MiB private bytes. Importing the RPC bundle with presence paused measured 133.2 MiB and 37.9 MiB. These samples did not connect to Discord or poll workspaces, so they show host and module overhead, not a before/after optimization result.
-
-The RPC adapter stops unused SDK REST sweepers when creating a connection. This allows old REST instances to be collected after reconnects or failed logins. It prevents accumulation; it does not remove Orca's Node runtime or promise a 10 MiB plugin.
+A previous 30-second sample of the active SDK-based worker measured about 135 to 137 MiB total working set, with average CPU near 0.06% of total CPU capacity. Active usage of the new IPC build still needs a separate measurement. The tables exclude Orca, Discord, and short-lived polling children.
 
 To reduce polling frequency, increase `pollMs`, for example to `30000`. This reduces periodic CLI work, not the worker's steady runtime footprint. Pausing RPC leaves the worker loaded; disable the plugin when you want its worker to exit.
 

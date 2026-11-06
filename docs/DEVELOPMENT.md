@@ -11,7 +11,7 @@ npm run typecheck
 npm run build:plugin
 ```
 
-The build writes `plugin/runtime.mjs` and `plugin/THIRD-PARTY-NOTICES.txt`. Commit these files whenever plugin source or dependencies change. Orca installs committed files from Git; plugin users do not run npm or build the worker themselves.
+The build writes `plugin/runtime.mjs`. Commit it whenever plugin source changes. The runtime uses project source and Node built-ins only; the build rejects npm runtime imports. Orca installs committed files from Git, so plugin users do not run npm or build the worker themselves.
 
 The tests include an isolated bundle import that refuses unbundled dependencies. They use fake transports and hosts for lifecycle tests, without changing live Orca or Discord state.
 

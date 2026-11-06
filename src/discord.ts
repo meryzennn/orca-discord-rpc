@@ -1,4 +1,4 @@
-import { Client } from '@xhayper/discord-rpc'
+import { createDiscordIpcClient } from './discord-ipc.ts'
 import type { PresenceActivity } from './presence.ts'
 
 export type DiscordPresence = {
@@ -31,7 +31,7 @@ export type DiscordRpcClientLike = {
 export function createDiscordPresence(
   clientId: string,
   createClient: (clientId: string) => DiscordRpcClientLike = (id) =>
-    new Client({ clientId: id })
+    createDiscordIpcClient(id)
 ): DiscordPresence {
   let client: DiscordRpcClientLike | null = null
   let connected = false
@@ -75,12 +75,6 @@ export function createDiscordPresence(
     const next = createClient(clientId)
     client = next
     visible = false
-    // shortcut: SDK 1.5.1 keeps REST private; drop this when SDK teardown clears its unused timers.
-    const rest: unknown = Object.getOwnPropertyDescriptor(next, 'rest')?.value
-    if (rest !== null && typeof rest === 'object') {
-      if ('clearHashSweeper' in rest && typeof rest.clearHashSweeper === 'function') rest.clearHashSweeper()
-      if ('clearHandlerSweeper' in rest && typeof rest.clearHandlerSweeper === 'function') rest.clearHandlerSweeper()
-    }
     next.on('disconnected', () => {
       if (client !== next) return
       connected = false
@@ -117,11 +111,10 @@ export function createDiscordPresence(
         if (!active || client !== active || !connected || !user || canPublish?.() === false) {
           return false
         }
-        // Our URL fields are fallback image sources; the SDK's URL fields are click links.
-        const { largeImageUrl, smallImageUrl, ...sdkActivity } = activity
-        if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl
-        if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl
-        await user.setActivity(sdkActivity)
+        const { largeImageUrl, smallImageUrl, ...normalizedActivity } = activity
+        if (!normalizedActivity.largeImageKey && largeImageUrl) normalizedActivity.largeImageKey = largeImageUrl
+        if (!normalizedActivity.smallImageKey && smallImageUrl) normalizedActivity.smallImageKey = smallImageUrl
+        await user.setActivity(normalizedActivity)
         if (client !== active || !connected) return false
         lastFailure = null
         visible = true
