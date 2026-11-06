@@ -333,3 +333,47 @@ it('clears absent workspaces and retries a failed read on the next refresh', asy
   assert.deepEqual(h.order, ['apply', 'clear'])
   await h.session.stop()
 })
+
+it('keeps one owned client across repeated privacy changes and ignores retired events', async () => {
+  const clients: { disconnect(): void; closed: boolean }[] = []
+  const sent: PresenceActivity[] = []
+  const transport = createDiscordPresence(DEFAULT_CLIENT_ID, () => {
+    let disconnected: (() => void) | undefined
+    const record = { closed: false, disconnect: () => disconnected?.() }
+    clients.push(record)
+    return {
+      on: (_event, listener) => { disconnected = listener },
+      login: async () => {},
+      destroy: async () => { record.closed = true },
+      user: {
+        setActivity: async activity => { sent.push(activity) },
+        clearActivity: async () => {}
+      }
+    }
+  })
+  const session = createPluginSession({
+    config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
+    enabled: true, incognito: false, readState: async () => state,
+    transport, onStatus: () => {}, log: () => {}, scheduleInterval: () => () => {}
+  })
+  try {
+    await session.refresh()
+    for (const incognito of [true, false, true, false]) {
+      await session.setIncognito(incognito)
+      assert.equal(clients.filter(client => !client.closed).length, 1)
+      const created = clients.length
+      const generation = transport.connectionGeneration()
+      for (const retired of clients.slice(0, -1)) retired.disconnect()
+      assert.equal(transport.isConnected(), true)
+      assert.equal(transport.connectionGeneration(), generation)
+      await session.refresh()
+      assert.equal(clients.length, created)
+      assert.equal(sent.at(-1)?.smallImageText, 'Agent: Oh My Pi')
+      if (incognito) {
+        assert.ok(!JSON.stringify(sent.at(-1)).includes('secret-'))
+        assert.equal(sent.at(-1)?.buttons, undefined)
+      }
+    }
+  } finally { await session.stop() }
+  assert.equal(clients.filter(client => !client.closed).length, 0)
+})

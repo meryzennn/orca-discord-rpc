@@ -35,35 +35,63 @@ export function createDiscordPresence(
   let client: DiscordRpcClientLike | null = null
   let connected = false
   let generation = 0
+  let lifecycle = 0
 
-  const ensureClient = async (): Promise<DiscordRpcClientLike> => {
-    if (client && connected) {
-      return client
+  const retire = async (current: DiscordRpcClientLike): Promise<void> => {
+    if (client !== current) return
+    client = null
+    connected = false
+    try {
+      await current.destroy()
+    } catch (error) {
+      // Failed cleanup must finish before a later attempt opens another socket.
+      if (client === null) client = current
+      throw error
     }
+  }
+
+  const ensureClient = async (): Promise<DiscordRpcClientLike | null> => {
+    if (client && connected) return client
+    const epoch = lifecycle
     if (client) {
-      await client.destroy().catch(() => {})
-      client = null
+      try { await retire(client) }
+      catch { generation += 1; return null }
     }
+    if (epoch !== lifecycle) return null
     const next = createClient(clientId)
-    // Why: Discord can restart under us; without this the daemon would keep believing
-    // the old activity is still displayed and never re-send it.
+    client = next
     next.on('disconnected', () => {
+      if (client !== next) return
       connected = false
+      lifecycle += 1
       generation += 1
     })
-    await next.login()
-    client = next
+    try {
+      await next.login()
+    } catch {
+      if (client === next) {
+        connected = false
+        generation += 1
+        await retire(next).catch(() => {})
+      }
+      return null
+    }
+    if (client !== next || epoch !== lifecycle) {
+      if (client === next) await retire(next).catch(() => {})
+      return null
+    }
     connected = true
     return next
   }
 
   return {
     async apply(activity: PresenceActivity, canPublish?: () => boolean): Promise<boolean> {
+      let active: DiscordRpcClientLike | null = null
       try {
-        const active = await ensureClient()
-        const user = active.user
+        active = await ensureClient()
+        const user = active?.user
         // Privacy or shutdown intent can change while login is pending.
-        if (!user || canPublish?.() === false) {
+        if (!active || client !== active || !connected || !user || canPublish?.() === false) {
           return false
         }
         // Our URL fields are fallback image sources; the SDK's URL fields are click links.
@@ -71,32 +99,34 @@ export function createDiscordPresence(
         if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl
         if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl
         await user.setActivity(sdkActivity)
-        return true
+        return client === active && connected
       } catch {
-        // Why reset: a dropped connection must force a fresh login on the next attempt.
-        connected = false
-        generation += 1
+        if (active === null || client === active) {
+          connected = false
+          generation += 1
+        }
         return false
       }
     },
     async clear(): Promise<boolean> {
+      const current = client
       try {
-        await client?.user?.clearActivity()
-        // Why released: nothing is displayed after a clear, so reporting "connected" would tell
-        // the menu the profile is fine while it shows no activity at all.
-        connected = false
+        await current?.user?.clearActivity()
+        if (client === current) connected = false
         return true
       } catch {
-        connected = false
-        generation += 1
+        if (client === current) {
+          connected = false
+          generation += 1
+        }
         return false
       }
     },
     async destroy(): Promise<void> {
-      const current = client
-      client = null
+      lifecycle += 1
       connected = false
-      await current?.destroy().catch(() => {})
+      const current = client
+      if (current) await retire(current)
     },
     connectionGeneration: () => generation,
     isConnected: () => connected

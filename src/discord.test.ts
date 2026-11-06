@@ -39,12 +39,12 @@ it('serializes project fallback image sources as SDK image assets, with keys tak
 })
 
 /** A stand-in for the RPC client, so no Discord is needed and failures can be forced. */
-function fakeClient(options: { failLogin?: boolean; failSet?: boolean; login?: () => Promise<void> } = {}) {
+function fakeClient(options: { failLogin?: boolean; failSet?: boolean; failClear?: boolean; login?: () => Promise<void> } = {}) {
   let destroyed = 0
+  let disconnected: (() => void) | undefined
   const sent: PresenceActivity[] = []
   const client = {
-    // Why present: the transport subscribes to 'disconnected' to learn about a Discord restart.
-    on: (): void => {},
+    on: (_event: string, listener: () => void): void => { disconnected = listener },
     login: async (): Promise<void> => {
       if (options.failLogin) {
         throw new Error('EPIPE')
@@ -62,12 +62,15 @@ function fakeClient(options: { failLogin?: boolean; failSet?: boolean; login?: (
         sent.push(activity)
         return {}
       },
-      clearActivity: async (): Promise<void> => {}
+      clearActivity: async (): Promise<void> => {
+        if (options.failClear) throw new Error('EPIPE')
+      }
     }
   }
   return {
     client,
     sent,
+    disconnect: () => disconnected?.(),
     destroyed: () => destroyed
   }
 }
@@ -134,4 +137,71 @@ it('checks publication intent after deferred login and permits a later retry', a
   assert.equal(await presence.apply(activity, () => allowed), true)
   assert.deepEqual(fake.sent, [activity])
   await presence.destroy()
+})
+
+it('ignores a retired disconnect and still detects the current disconnect', async () => {
+  const old = fakeClient()
+  const next = fakeClient()
+  let created = 0
+  const presence = createDiscordPresence('1', () => [old, next][created++]!.client)
+  await presence.apply(activity)
+  await presence.destroy()
+  await presence.apply(activity)
+  const generation = presence.connectionGeneration()
+  old.disconnect()
+  assert.equal(presence.isConnected(), true)
+  assert.equal(presence.connectionGeneration(), generation)
+  next.disconnect()
+  assert.equal(presence.isConnected(), false)
+  assert.ok(presence.connectionGeneration() > generation)
+  await presence.destroy()
+})
+
+it('destroys a failed login candidate before a fresh successful attempt', async () => {
+  const failed = fakeClient({ failLogin: true })
+  const recovered = fakeClient()
+  let created = 0
+  const presence = createDiscordPresence('1', () => [failed, recovered][created++]!.client)
+  assert.equal(await presence.apply(activity), false)
+  assert.equal(failed.destroyed(), 1)
+  assert.equal(await presence.apply(activity), true)
+  assert.equal(presence.isConnected(), true)
+  await presence.destroy()
+  assert.equal(recovered.destroyed(), 1)
+})
+
+it('cannot publish or regain ownership after destroy during deferred login', async () => {
+  let enter!: () => void
+  let release!: () => void
+  const entered = new Promise<void>(resolve => { enter = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const fake = fakeClient({ login: async () => { enter(); await gate } })
+  const presence = createDiscordPresence('1', () => fake.client)
+  const pending = presence.apply(activity)
+  await entered
+  await presence.destroy()
+  assert.equal(fake.destroyed(), 1)
+  release()
+  assert.equal(await pending, false)
+  assert.equal(presence.isConnected(), false)
+  assert.deepEqual(fake.sent, [])
+})
+
+it('does not republish through a client whose explicit destruction failed', async () => {
+  const fake = fakeClient()
+  let fail = true
+  const destroy = fake.client.destroy
+  fake.client.destroy = async () => {
+    if (fail) throw new Error('close failed')
+    await destroy()
+  }
+  const presence = createDiscordPresence('1', () => fake.client)
+  await presence.apply(activity)
+  await assert.rejects(presence.destroy(), /close failed/)
+  assert.equal(presence.isConnected(), false)
+  assert.equal(await presence.apply(activity), false)
+  assert.equal(fake.sent.length, 1)
+  fail = false
+  await presence.destroy()
+  assert.equal(fake.destroyed(), 1)
 })
