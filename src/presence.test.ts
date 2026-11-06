@@ -301,3 +301,26 @@ describe('buildActivity', () => {
     }
   })
 })
+
+describe('Oh My Pi presence', () => {
+  for (const useUploadedArt of [false, true]) {
+    it(`uses OMP artwork with useUploadedArt=${useUploadedArt}`, () => {
+      const logoUrl = 'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png'
+      const activity = buildActivity({
+        projectName: 'orca-discord-rpc',
+        agentType: 'omp',
+        runningAgentCount: 2,
+        agentActive: true,
+        branchName: 'main',
+        startedAt: new Date('2026-11-06T00:00:00Z'),
+        useUploadedArt
+      })
+
+      assert.equal(activity.details, 'Oh My Pi +1')
+      assert.equal(activity.state, 'orca-discord-rpc · Working')
+      assert.equal(activity.largeImageKey, useUploadedArt ? 'omp' : undefined)
+      assert.equal(activity.largeImageUrl, useUploadedArt ? undefined : logoUrl)
+      assert.equal(activity.smallImageText, 'main')
+    })
+  }
+})

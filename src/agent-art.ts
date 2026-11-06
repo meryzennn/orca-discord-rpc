@@ -18,6 +18,7 @@ export const AGENT_ART_KEYS: Record<string, string> = {
   codex: 'codex',
   opencode: 'opencode',
   opencode2: 'opencode',
+  omp: 'omp',
   'command-code': 'commandcode',
   dsh: 'deepsek-harnnes',
   grok: 'grock',
@@ -62,6 +63,9 @@ export function agentArtKey(agentType: string): string | null {
 
 /** A public image URL for an agent, used when uploaded art is not in play. */
 export function agentFaviconUrl(agentType: string): string | null {
+  if (agentType === 'omp') {
+    return 'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png'
+  }
   const domain = AGENT_ICON_DOMAINS[agentType]
   return domain ? FAVICON(domain, 256) : null
 }
