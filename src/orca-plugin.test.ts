@@ -358,7 +358,7 @@ it('applies status-bar privacy intent before a pending resume can publish a publ
   const h = harness({ incognito: false, enabled: false }, null, async () => {
     started.resolve()
     await gate.promise
-    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1 }
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
   })
   try {
     await h.lifecycle.activate()
