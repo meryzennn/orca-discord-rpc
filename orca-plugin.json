@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-plugin.v2.schema.json",
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "discord-presence",
+  "name": "Discord Rich Presence",
+  "version": "0.2.0",
+  "description": "Show your active Orca workspace and agent on Discord while Orca is open.",
+  "license": "MIT",
+  "repository": "https://github.com/meryzennn/orca-discord-rpc",
+  "engines": { "orca": ">=1.4.250" },
+  "pluginApi": 1,
+  "main": "plugin/runtime.mjs",
+  "contributes": {
+    "commands": [{ "id": "presence.toggle", "title": "Discord RPC: Pause or resume" }],
+    "statusBarItems": [{
+      "id": "presence", "text": "RPC", "icon": "plug",
+      "tooltip": "Discord Rich Presence", "command": "presence.toggle"
+    }],
+    "events": [{ "on": "workspace.changed" }, { "on": "agent.status.changed" }],
+    "settings": [
+      { "key": "enabled", "title": "Enable presence", "type": "boolean", "default": true },
+      { "key": "incognito", "title": "Incognito Mode", "type": "boolean", "description": "Hide the project and actual branch on Discord." }
+    ]
+  },
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "agent:read" },
+    { "kind": "settings:own" }
+  ]
+}

@@ -1,0 +1,227 @@
+import { it } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { setImmediate } from 'node:timers/promises'
+import { createPluginLifecycle, readLegacyConfig, type PluginApi, type LegacyConfig } from './orca-plugin.ts'
+import { createPluginSession } from './plugin-session.ts'
+import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
+import type { PresenceActivity } from './presence.ts'
+
+it('declares a resident worker with a real status command and both refresh events', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
+  assert.equal(manifest.manifestVersion, 2)
+  assert.equal(manifest.execution, 'trusted-worker')
+  assert.equal(manifest.main, 'plugin/runtime.mjs')
+  assert.equal(manifest.engines.orca, '>=1.4.250')
+  const command = manifest.contributes.statusBarItems[0].command
+  assert.ok(manifest.contributes.commands.some((entry: { id: string }) => entry.id === command))
+  assert.deepEqual(manifest.contributes.events, [{ on: 'workspace.changed' }, { on: 'agent.status.changed' }])
+  assert.equal(manifest.contributes.settings.find((setting: { key: string }) => setting.key === 'incognito').default, undefined)
+})
+
+it('reads valid legacy Incognito through a BOM and ignores malformed config', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-plugin-bootstrap-'))
+  try {
+    const config = join(root, 'config.json')
+    assert.equal(readLegacyConfig(config), null)
+    for (const contents of ['{"incognito":true}', '\uFEFF{"incognito":true}']) {
+      writeFileSync(config, contents)
+      assert.equal(readLegacyConfig(config)?.incognito, true)
+    }
+    for (const contents of ['[', '[]', 'null', 'true']) {
+      writeFileSync(config, contents)
+      assert.equal(readLegacyConfig(config), null)
+    }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => { resolve = done })
+  return { promise, resolve }
+}
+
+function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | null = null,
+  readState?: (signal: AbortSignal) => Promise<null>) {
+  const settings = new Map(Object.entries(values))
+  const commands = new Map<string, () => Promise<unknown>>()
+  const events = new Map<string, () => void>()
+  const changes = new Set<(event: { key: string }) => void>()
+  const reads: string[] = []
+  const writes: [string, boolean][] = []
+  const logs: string[] = []
+  const statuses: Record<string, string>[] = []
+  const activities: PresenceActivity[] = []
+  const order: string[] = []
+  let signal: AbortSignal | null = null
+  let get = async (key: string): Promise<unknown> => settings.get(key)
+  let stateReads = 0
+  let connected = false
+  const orca: PluginApi = {
+    log: message => { logs.push(message) },
+    settings: {
+      get: key => { reads.push(key); return get(key) },
+      set: async (key, value) => {
+        writes.push([key, value]); settings.set(key, value)
+        changes.forEach(handler => handler({ key }))
+      },
+      onDidChange: handler => { changes.add(handler); return { dispose: () => { changes.delete(handler) } } }
+    },
+    commands: { register: (id, handler) => {
+      commands.set(id, handler); return { dispose: () => { commands.delete(id) } }
+    } },
+    events: { on: (event, handler) => {
+      events.set(event, handler); return { dispose: () => { events.delete(event) } }
+    } },
+    host: { call: async (method, params) => { assert.equal(method, 'statusBar.update'); statuses.push(params) } }
+  }
+  const lifecycle = createPluginLifecycle(orca, legacy, (enabled, incognito, abort, onStatus) => {
+    signal = abort
+    return createPluginSession({
+      config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
+      enabled, incognito, onStatus, log: orca.log, scheduleInterval: () => () => {},
+      readState: async () => {
+        stateReads += 1
+        if (readState) return readState(abort)
+        return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
+      },
+      transport: {
+        apply: async (activity, canPublish) => {
+          if (canPublish?.() === false) return false
+          activities.push(activity); order.push('apply'); connected = true; return true
+        },
+        clear: async () => { order.push('clear'); connected = false; return true },
+        destroy: async () => { order.push('destroy'); connected = false },
+        isConnected: () => connected, connectionGeneration: () => 0
+      }
+    })
+  })
+  return {
+    lifecycle, commands, events, changes, reads, writes, logs, statuses, activities, order,
+    stateReads: () => stateReads, signal: () => signal,
+    setGet: (handler: typeof get) => { get = handler },
+    change: (key: string, value: unknown) => { settings.set(key, value); changes.forEach(handler => handler({ key })) }
+  }
+}
+
+it('migrates only a legacy boolean before the first push and preserves saved Incognito', async () => {
+  for (const [saved, legacy, expected, migrated] of [
+    [undefined, true, true, true], [undefined, 'true', false, true], [false, true, false, false]
+  ] as const) {
+    const h = harness({ incognito: saved }, { incognito: legacy })
+    try {
+      await h.lifecycle.activate()
+      await setImmediate()
+      assert.deepEqual(h.writes, migrated ? [['incognito', expected]] : [])
+      assert.equal(h.activities[0]?.state, expected ? 'Private Project · Working' : 'secret-project · Working')
+      if (expected) assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
+    } finally { await h.lifecycle.deactivate() }
+  }
+})
+
+it('rejects invalid saved booleans without creating a session or subscriptions', async () => {
+  for (const values of [{ incognito: 'true' }, { incognito: true, enabled: 'true' }]) {
+    const h = harness(values)
+    await assert.rejects(h.lifecycle.activate(), /setting must be boolean/)
+    assert.equal(h.signal(), null)
+    assert.equal(h.commands.size + h.events.size + h.changes.size, 0)
+    await h.lifecycle.deactivate()
+  }
+})
+
+it('returns from activation during the first read and aborts it before final cleanup', async () => {
+  const started = deferred<void>()
+  const h = harness({ incognito: true }, null, async signal => {
+    started.resolve()
+    await new Promise<void>((_resolve, reject) => {
+      signal.addEventListener('abort', () => { h.order.push('abort'); reject(new Error('reader aborted')) }, { once: true })
+    })
+    return null
+  })
+  await h.lifecycle.activate()
+  await started.promise
+  assert.equal(h.stateReads(), 1)
+  assert.equal(h.statuses[0]?.text, 'RPC waiting')
+  await h.lifecycle.deactivate()
+  await h.lifecycle.deactivate()
+  assert.equal(h.signal()?.aborted, true)
+  assert.deepEqual(h.order, ['abort', 'clear', 'destroy'])
+  assert.equal(h.commands.size + h.events.size + h.changes.size, 0)
+})
+
+it('cancels bootstrap while an awaited host setting is pending', async () => {
+  const gate = deferred<unknown>()
+  const h = harness()
+  h.setGet(() => gate.promise)
+  const activation = h.lifecycle.activate()
+  await h.lifecycle.deactivate()
+  gate.resolve(undefined)
+  await activation
+  assert.equal(h.signal(), null)
+  assert.deepEqual(h.writes, [])
+  assert.equal(h.commands.size + h.events.size + h.changes.size, 0)
+})
+
+it('wires native pause/resume, both event refreshes, and live privacy changes', async () => {
+  const h = harness({ incognito: false })
+  try {
+    await h.lifecycle.activate()
+    await setImmediate()
+    assert.equal(h.statuses.at(-1)?.text, 'RPC')
+    assert.deepEqual([...h.events.keys()], ['workspace.changed', 'agent.status.changed'])
+    h.events.get('workspace.changed')!()
+    await setImmediate()
+    h.events.get('agent.status.changed')!()
+    await setImmediate()
+    assert.equal(h.stateReads(), 3)
+    const toggle = h.commands.get('presence.toggle')!
+    await toggle()
+    await setImmediate()
+    assert.equal(h.statuses.at(-1)?.text, 'RPC paused')
+    h.events.get('workspace.changed')!()
+    await setImmediate()
+    assert.equal(h.stateReads(), 3)
+    await toggle()
+    await setImmediate()
+    assert.equal(h.activities.length, 2)
+    h.change('incognito', true)
+    await setImmediate()
+    assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'destroy', 'apply'])
+    assert.equal(h.activities.at(-1)?.state, 'Private Project · Working')
+    assert.ok(!JSON.stringify(h.activities.at(-1)).includes('secret-branch'))
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('orders setting reads and skips queued changes after deactivation', async () => {
+  const h = harness({ incognito: true, enabled: false })
+  const gate = deferred<unknown>()
+  await h.lifecycle.activate()
+  h.reads.length = 0
+  h.setGet(key => key === 'enabled' ? gate.promise : Promise.resolve(false))
+  h.change('enabled', true)
+  h.change('incognito', false)
+  await setImmediate()
+  assert.deepEqual(h.reads, ['enabled'])
+  await h.lifecycle.deactivate()
+  gate.resolve(true)
+  await setImmediate()
+  assert.deepEqual(h.reads, ['enabled'])
+  assert.equal(h.stateReads(), 0)
+})
+
+it('logs an invalid live setting and continues processing the next valid change', async () => {
+  const h = harness({ incognito: true, enabled: false })
+  try {
+    await h.lifecycle.activate()
+    h.change('enabled', 'true')
+    await setImmediate()
+    assert.ok(h.logs.some(message => /enabled setting must be boolean/.test(message)))
+    assert.equal(h.stateReads(), 0)
+    await assert.rejects(h.commands.get('presence.toggle')!(), /enabled setting must be boolean/)
+    h.change('enabled', true)
+    await setImmediate()
+    assert.equal(h.activities[0]?.state, 'Private Project · Working')
+  } finally { await h.lifecycle.deactivate() }
+})
