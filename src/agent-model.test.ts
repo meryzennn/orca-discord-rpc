@@ -79,6 +79,31 @@ describe('findAgentModel', () => {
     assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), 'GPT-5.1 Codex')
   })
 
+  it('finds the latest model before a long turn instead of losing it outside the tail', () => {
+    freshHome()
+    const day = join(home, '.codex', 'sessions', '2026', '11', '06')
+    mkdirSync(day, { recursive: true })
+    const file = join(day, 'rollout-long.jsonl')
+    const meta = '{"type":"session_meta","payload":{"cwd":"/home/me/app"}}\n'
+    const padding = JSON.stringify({ type: 'event_msg', payload: { message: 'x'.repeat(200_000) } }) + '\n'
+    writeFileSync(file, meta + '{"type":"turn_context","payload":{"model":"gpt-6.1-sol"}}\n' + padding)
+    assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), 'GPT-6.1 Sol')
+    writeFileSync(file, meta + '{"type":"turn_context","payload":{"model":"gpt-6.1-sol"}}\n' + padding +
+      '{"type":"turn_context","payload":{"model":"gpt-6-astra"}}\n' + padding)
+    assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), 'GPT-6 Astra')
+  })
+
+  it('keeps a model identifier intact when it crosses a backward-read boundary', () => {
+    freshHome()
+    const day = join(home, '.codex', 'sessions', '2026', '11', '06')
+    mkdirSync(day, { recursive: true })
+    const record = '{"type":"turn_context","payload":{"model":"gpt-6-astra"}}\n'
+    const padding = 65536 - (record.length - record.indexOf('"model"') - 4)
+    writeFileSync(join(day, 'rollout-boundary.jsonl'),
+      '{"type":"session_meta","payload":{"cwd":"/home/me/app"}}\n' + record + '\n'.repeat(padding))
+    assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), 'GPT-6 Astra')
+  })
+
   it('honours the config folder override', () => {
     freshHome()
     const custom = join(home, 'custom-claude')

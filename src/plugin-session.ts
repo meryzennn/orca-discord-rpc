@@ -74,7 +74,7 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
           throw error
         }
       },
-      // The queued privacy change must close the old socket before any new push.
+      // Publication waits until the old activity is cleared or its socket is closed.
       apply: async activity => {
         if (closed || privacyPending) return false
         const ok = await options.transport.apply(activity, () => !closed && !privacyPending)
@@ -113,8 +113,8 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
       privacyPending = true
       return serial(async () => {
         if (!closed) {
-          if (enabled) await runtime.pause().catch(report)
-          await destroyTransport()
+          const cleared = await runtime.pause().catch(error => { report(error); return false })
+          if (!cleared) await destroyTransport()
         }
         privacyPending = false
         if (!closed && enabled) await runtime.start()

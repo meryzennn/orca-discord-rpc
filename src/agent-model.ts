@@ -7,8 +7,9 @@ import { homedir } from 'node:os'
  * session log: Claude Code under ~/.claude/projects, Codex under ~/.codex/sessions.
  */
 
-/** Why only the tail: a session log grows to megabytes and the newest turn is at the end. */
+/** Scan backwards in small blocks so long turns don't hide their model metadata. */
 const TAIL_BYTES = 64 * 1024
+const MODEL_OVERLAP_BYTES = 1024
 /** Why so small: Codex writes the folder near the start of its first line. */
 const HEAD_BYTES = 16 * 1024
 /** Why capped: Codex keeps every session for months, and only a recent one can be live. */
@@ -44,7 +45,7 @@ export function findAgentModel(
     } else {
       return null
     }
-    const raw = log === null ? null : lastModelIn(readSlice(log, 'tail', TAIL_BYTES))
+    const raw = log === null ? null : readLastModel(log)
     return raw === null ? null : prettyModelName(raw)
   } catch {
     // Why swallowed: an unreadable log must cost only the model name, never the presence.
@@ -167,6 +168,22 @@ function newestCodexSession(codexHome: string, worktreePath: string): string | n
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function readLastModel(path: string): string | null {
+  const fd = openSync(path, 'r')
+  try {
+    const size = fstatSync(fd).size
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES))
+    let position = Math.max(0, size - TAIL_BYTES)
+    while (true) {
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position)
+      const model = lastModelIn(buffer.toString('utf8', 0, read))
+      if (model !== null || position === 0) return model
+      // Overlap keeps an identifier split across block boundaries intact.
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES)
+    }
+  } finally { closeSync(fd) }
 }
 
 function readSlice(path: string, end: 'head' | 'tail', bytes: number): string {

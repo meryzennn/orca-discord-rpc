@@ -35,6 +35,7 @@ export function createDiscordPresence(
 ): DiscordPresence {
   let client: DiscordRpcClientLike | null = null
   let connected = false
+  let visible = false
   let generation = 0
   let lifecycle = 0
   let lastFailure: string | null = null
@@ -50,6 +51,7 @@ export function createDiscordPresence(
     if (client !== current) return
     client = null
     connected = false
+    visible = false
     try {
       await current.destroy()
     } catch (error) {
@@ -72,9 +74,11 @@ export function createDiscordPresence(
     if (epoch !== lifecycle) return null
     const next = createClient(clientId)
     client = next
+    visible = false
     next.on('disconnected', () => {
       if (client !== next) return
       connected = false
+      visible = false
       lifecycle += 1
       generation += 1
     })
@@ -114,6 +118,7 @@ export function createDiscordPresence(
         await user.setActivity(sdkActivity)
         if (client !== active || !connected) return false
         lastFailure = null
+        visible = true
         return true
       } catch (error) {
         if (active === null || client === active) {
@@ -127,9 +132,13 @@ export function createDiscordPresence(
     async clear(): Promise<boolean> {
       const current = client
       try {
+        if (current && !current.user) {
+          failure('clear', { code: 4 })
+          return false
+        }
         await current?.user?.clearActivity()
         if (client === current) {
-          connected = false
+          visible = false
           lastFailure = null
         }
         return true
@@ -151,7 +160,7 @@ export function createDiscordPresence(
       if (epoch === lifecycle && client === null) lastFailure = null
     },
     connectionGeneration: () => generation,
-    isConnected: () => connected,
+    isConnected: () => connected && visible,
     lastError: () => lastFailure
   }
 }

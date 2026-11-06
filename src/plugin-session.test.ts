@@ -1,5 +1,6 @@
 import { it } from 'node:test'
 import assert from 'node:assert/strict'
+import { setImmediate } from 'node:timers/promises'
 import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
 import type { PresenceState } from './presence-controller.ts'
 import type { PresenceActivity } from './presence.ts'
@@ -95,7 +96,7 @@ it('redacts private state before the reused builder and clears before changing p
   assert.equal(h.pushed[0]?.smallImageText, 'Agent: Oh My Pi')
   assert.equal(h.pushed[0]?.buttons, undefined)
   await h.session.setIncognito(false)
-  assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
+  assert.deepEqual(h.order, ['apply', 'clear', 'apply'])
   assert.equal(h.pushed[1]?.state, 'Folder: secret-project')
   assert.equal(h.pushed[1]?.smallImageText, 'Agent: Oh My Pi')
   assert.deepEqual(h.pushed[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/secret-owner/secret-repo' }])
@@ -116,7 +117,7 @@ it('applies new Incognito intent before a pending read can publish its result', 
   await h.session.stop()
 })
 
-it('clears and closes the previous socket before a pending poll republishes changed privacy', async () => {
+it('clears the previous activity before a pending poll republishes changed privacy', async () => {
   const entered = deferred()
   const gate = deferred()
   let reads = 0
@@ -131,7 +132,7 @@ it('clears and closes the previous socket before a pending poll republishes chan
   const privateMode = h.session.setIncognito(true)
   gate.resolve()
   await Promise.all([pending, privateMode])
-  assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
+  assert.deepEqual(h.order, ['apply', 'clear', 'apply'])
   assert.equal(h.pushed[1]?.state, 'Folder: Private Project')
   assert.ok(!JSON.stringify(h.pushed[1]).includes('secret-branch'))
   await h.session.stop()
@@ -172,7 +173,7 @@ it('starts paused and uses the latest privacy setting on resume', async () => {
   await h.session.refresh()
   await h.session.setIncognito(true)
   assert.equal(h.reads(), 0)
-  assert.deepEqual(h.order, ['destroy'])
+  assert.deepEqual(h.order, ['clear'])
   await h.session.setEnabled(true)
   assert.equal(h.pushed[0]?.state, 'Folder: Private Project')
   await h.session.setEnabled(true)
@@ -239,7 +240,7 @@ it('prevents a public request after Incognito intent during real transport login
   const privateMode = h.session.setIncognito(true)
   h.gate.resolve()
   await Promise.all([pending, privateMode])
-  assert.deepEqual(h.order, ['login', 'clear', 'destroy', 'login', 'send:Folder: Private Project'])
+  assert.deepEqual(h.order, ['login', 'clear', 'send:Folder: Private Project'])
   assert.equal(h.sent.length, 1)
   assert.ok(!JSON.stringify(h.sent).includes('secret-project'))
   assert.ok(!JSON.stringify(h.sent).includes('secret-branch'))
@@ -290,7 +291,7 @@ it('closes the old public socket when privacy changes while paused after a faile
   await h.session.refresh()
   await assert.rejects(h.session.setEnabled(false), /clear failed/)
   await h.session.setIncognito(true)
-  assert.deepEqual(h.order, ['apply', 'clear', 'destroy'])
+  assert.deepEqual(h.order, ['apply', 'clear', 'clear', 'destroy'])
   assert.equal(h.reads(), 1)
   await h.session.setEnabled(true)
   assert.equal(h.pushed[1]?.state, 'Folder: Private Project')
@@ -298,7 +299,7 @@ it('closes the old public socket when privacy changes while paused after a faile
 })
 
 it('does not republish if privacy socket destruction fails and permits later queued cleanup', async () => {
-  const h = harness({ incognito: false, failDestroy: true })
+  const h = harness({ incognito: false, failClear: true, failDestroy: true })
   await h.session.refresh()
   await assert.rejects(h.session.setIncognito(true), /destroy failed/)
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy'])
@@ -337,7 +338,7 @@ it('clears absent workspaces and retries a failed read on the next refresh', asy
   await h.session.stop()
 })
 
-it('keeps one owned client across repeated privacy changes and ignores retired events', async () => {
+it('reuses one owned client across repeated acknowledged privacy changes', async () => {
   const clients: { disconnect(): void; closed: boolean }[] = []
   const sent: PresenceActivity[] = []
   const transport = createDiscordPresence(DEFAULT_CLIENT_ID, () => {
@@ -364,6 +365,7 @@ it('keeps one owned client across repeated privacy changes and ignores retired e
     for (const incognito of [true, false, true, false]) {
       await session.setIncognito(incognito)
       assert.equal(clients.filter(client => !client.closed).length, 1)
+      assert.equal(clients.length, 1)
       const created = clients.length
       const generation = transport.connectionGeneration()
       for (const retired of clients.slice(0, -1)) retired.disconnect()
@@ -407,7 +409,9 @@ it('publishes the safe teardown error without sending the private activity', asy
     },
     user: {
       setActivity: async activity => { sent.push(activity) },
-      clearActivity: async () => {}
+      clearActivity: async () => {
+        if (fail) throw Object.assign(new Error('secret-project secret-branch'), { code: 'EPIPE' })
+      }
     }
   }))
   const session = createPluginSession({
@@ -427,4 +431,56 @@ it('publishes the safe teardown error without sending the private activity', asy
     assert.ok(logs.includes('Discord RPC destroy failed (code: EPIPE)'))
     assert.ok(!logs.some(line => line.includes('secret-branch')))
   } finally { fail = false; await session.stop() }
+})
+
+it('recovers on the scheduled poll after a failed privacy reconnect without another toggle', { timeout: 1000 }, async () => {
+  let created = 0
+  let tick: (() => void) | null = null
+  const sent: PresenceActivity[] = []
+  const statuses: PresenceRuntimeStatus[] = []
+  const recovered = deferred()
+  const fireInterval = (): void => { tick?.() }
+  const transport = createDiscordPresence(DEFAULT_CLIENT_ID, () => {
+    const index = created++
+    return {
+      on: () => {},
+      login: async () => {
+        if (index === 1) throw Object.assign(new Error('timeout'), { code: 1 })
+      },
+      destroy: async () => {},
+      user: {
+        clearActivity: async () => {
+          if (index === 0) throw Object.assign(new Error('clear failed'), { code: 'EPIPE' })
+        },
+        setActivity: async activity => {
+          sent.push(activity)
+          if (activity.state === 'Folder: Private Project') recovered.resolve()
+        }
+      }
+    }
+  })
+  const session = createPluginSession({
+    config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
+    enabled: true, incognito: false, readState: async () => ({ ...state, agentType: 'codex', model: 'GPT-6.1 Sol' }),
+    transport, onStatus: status => { statuses.push(status) }, log: () => {},
+    scheduleInterval: (callback, ms) => {
+      assert.equal(ms, DEFAULT_POLL_MS)
+      tick = callback
+      return () => { tick = null }
+    }
+  })
+  try {
+    await session.refresh()
+    await session.setIncognito(true)
+    assert.equal(statuses.at(-1)?.lastError, 'Discord RPC login failed (code: 1)')
+    assert.ok(tick)
+    fireInterval()
+    await recovered.promise
+    await setImmediate()
+    assert.equal(statuses.at(-1)?.discordConnected, true)
+    assert.equal(statuses.at(-1)?.lastError, null)
+    assert.equal(sent.length, 2)
+    assert.equal(sent.at(-1)?.smallImageText, 'GPT-6.1 Sol')
+    assert.ok(!JSON.stringify(sent.at(-1)).includes('secret-'))
+  } finally { await session.stop() }
 })

@@ -193,7 +193,7 @@ it('wires native pause/resume, both event refreshes, and live privacy changes', 
     assert.equal(h.activities.length, 2)
     h.change('incognito', true)
     await setImmediate()
-    assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'destroy', 'apply'])
+    assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
     assert.equal(h.activities.at(-1)?.state, 'Folder: Private Project')
     assert.ok(!JSON.stringify(h.activities.at(-1)).includes('secret-branch'))
   } finally { await h.lifecycle.deactivate() }
@@ -236,7 +236,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
     assert.equal(h.activities[0]?.state, 'Folder: Private Project')
     assert.ok(!JSON.stringify(h.activities).includes('secret-project'))
     assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
-    assert.deepEqual(h.order, ['clear', 'destroy', 'apply'])
+    assert.deepEqual(h.order, ['clear', 'apply'])
   } finally {
     gate.resolve()
     await h.lifecycle.deactivate()

@@ -52,6 +52,15 @@ it('has no branch fallback when the featured agent has no artwork', () => {
   }
 })
 
+it('uses the Codex model tooltip in normal and Incognito while retaining Codex branding', () => {
+  for (const incognito of [false, true]) {
+    const activity = buildTrayActivity({ ...base, agentType: 'codex', model: 'GPT-6.1 Sol', incognito })
+    assert.equal(activity.smallImageKey, 'codex')
+    assert.equal(activity.smallImageText, 'GPT-6.1 Sol')
+    assert.equal(activity.details, 'Agent: Codex +1 · Working')
+  }
+})
+
 it('redacts folder, branch and repository in Incognito and uses the small agent/model slot', () => {
   const activity = buildTrayActivity({ ...base, repoUrl: 'https://github.com/secret-owner/secret-repo', model: ' Claude\n Opus 5.5 ', incognito: true })
   assert.equal(activity.details, 'Agent: Claude +1 · Working')

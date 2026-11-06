@@ -259,3 +259,28 @@ it('does not echo an invalid error code into diagnostics', async () => {
   assert.equal(presence.lastError?.(), 'Discord RPC apply failed (code: unknown)')
   await presence.destroy()
 })
+
+it('reuses the live socket after an acknowledged clear while showing no activity', async () => {
+  const fake = fakeClient()
+  let created = 0
+  const presence = createDiscordPresence('1', () => { created += 1; return fake.client })
+  assert.equal(await presence.apply(activity), true)
+  assert.equal(await presence.clear(), true)
+  assert.equal(presence.isConnected(), false)
+  assert.equal(await presence.apply({ ...activity, state: 'Private Project' }), true)
+  assert.equal(created, 1)
+  assert.equal(fake.destroyed(), 0)
+  assert.equal(presence.isConnected(), true)
+  await presence.destroy()
+})
+
+it('does not acknowledge clearing an owned client whose user is unavailable', async () => {
+  let destroyed = 0
+  const presence = createDiscordPresence('1', () => ({
+    on: () => {}, login: async () => {}, destroy: async () => { destroyed += 1 }
+  }))
+  assert.equal(await presence.apply(activity), false)
+  assert.equal(await presence.clear(), false)
+  await presence.destroy()
+  assert.equal(destroyed, 1)
+})

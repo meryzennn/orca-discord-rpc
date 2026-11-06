@@ -36,8 +36,8 @@ export type PresenceRuntimeOptions = {
 
 export type PresenceRuntime = {
   start: () => Promise<void>
-  /** Stops polling and clears the activity, but keeps the transport for a later start. */
-  pause: () => Promise<void>
+  /** Stops polling; returns whether Discord acknowledged clearing the activity. */
+  pause: () => Promise<boolean>
   /** Real teardown: destroys the transport as well. */
   stop: () => Promise<void>
   getStatus: () => PresenceRuntimeStatus
@@ -155,12 +155,13 @@ export function createPresenceRuntime(options: PresenceRuntimeOptions): Presence
       cancel = deps.schedule(tick, options.pollMs)
       await tick()
     },
-    async pause(): Promise<void> {
+    async pause(): Promise<boolean> {
       paused = true
       cancel?.()
       cancel = null
-      await deps.clear()
+      const cleared = await deps.clear()
       notify()
+      return cleared
     },
     async stop(): Promise<void> {
       started = false
