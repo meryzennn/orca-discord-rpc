@@ -53,6 +53,20 @@ it('keeps every manifest screenshot inside Orca image limits', () => {
   assert.ok(total <= MAX_TOTAL_BYTES, `images total ${total} bytes`)
 })
 
+it('keeps the manifest cover inside Orca cover limits and out of the screenshot strip', () => {
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'orca-plugin.json'), 'utf8')) as
+    { cover?: { path: string; alt: string }; screenshots?: Screenshot[] }
+  assert.ok(manifest.cover, 'the plugin page needs a cover')
+  assert.match(manifest.cover.path, /\.(png|jpe?g)$/i)
+  const bytes = readFileSync(join(ROOT, manifest.cover.path))
+  // The cover limit (1024 KB) is lower than the screenshot limit.
+  assert.ok(bytes.length <= 1024 * 1024, `${manifest.cover.path} is ${bytes.length} bytes`)
+  const { width, height } = imageSize(bytes)
+  assert.ok(width >= 800 && height >= 500, `${manifest.cover.path} is ${width}x${height}, minimum 800x500`)
+  assert.ok(manifest.cover.alt.length > 0 && manifest.cover.alt.length <= 160)
+  assert.ok(!(manifest.screenshots ?? []).some(shot => shot.path === manifest.cover?.path), 'cover repeated as a screenshot')
+})
+
 it('only links README images that exist', () => {
   const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
   const images = [...readme.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(match => match[1]!)

@@ -25,7 +25,8 @@ Model lookup is one small module per agent in `src/model-resolvers/`, selected b
 
 Orca has no upload step for plugin images. The files live in the repository and the manifest points at them by relative path, so they are read from the commit a user installs. Put them in `docs/images/`; the README links the same files.
 
-- `screenshots` in `orca-plugin.json`: at most 6, shown in the order listed, so the first is the lead image. Each needs a `path` and an `alt` (at most 160 characters); `caption` (at most 120) and `theme` (`light` or `dark`) are optional. PNG, JPEG or WEBP, static, between 1280x800 and 2560x1600 (16:10 recommended), at most 1536 KB each and 8 MB together.
+- `cover` in `orca-plugin.json`: the wide image at the very top of the plugin page. One object with `path` and `alt` (at most 160 characters). PNG, JPEG or WEBP, static, at least 800x500, at most **1024 KB**, 16:10 recommended (1600x1000). Without it Orca shows a grey placeholder there. Do not repeat it in `screenshots`.
+- `screenshots` in `orca-plugin.json`: the strip below the cover. At most 6, shown in the order listed. Each needs a `path` and an `alt` (at most 160 characters); `caption` (at most 120) and `theme` (`light` or `dark`) are optional. PNG, JPEG or WEBP, static, between 1280x800 and 2560x1600 (16:10 recommended), at most 1536 KB each and 8 MB together.
 - `icon`: a separate field. Square PNG or WEBP, at least 128x128, at most 256 KB. A JPEG or a wide image cannot be the icon.
 
 An image outside these limits makes the manifest invalid and the plugin cannot be installed, so `src/manifest-assets.test.ts` checks them. Only a commit that contains the images shows them: a tag created earlier keeps the manifest it was created with.
@@ -102,7 +103,7 @@ The daemon builds its text with the same format definition and agent registry as
 1. Land the change with `npm ci`, `npm test`, `npm run typecheck`, and `npm run build:plugin` passing, and commit the rebuilt `plugin/runtime.mjs`.
 2. Set the same semver `version` in `package.json`, `package-lock.json`, and `orca-plugin.json`.
 3. Tag the commit `vX.Y.Z` and push the tag. Direct Git installs resolve `#vX.Y.Z`, so the tag must contain `orca-plugin.json` and the built `plugin/runtime.mjs`.
-4. Publish a GitHub release. The notes must say how to update: Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z`. The notes for the latest tag are in [release notes](release-notes/v0.2.1.md).
+4. Publish a GitHub release. The notes must say how to update: Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z`. The notes for the latest tag are in [release notes](release-notes/v0.2.2.md).
 5. Land breaking changes on a branch and merge them when you release: `#main` installs track every commit on it.
 
 Legacy Windows exe: its updater reads the repository's latest release, offers any newer tag, and downloads the first `.zip` asset (or `OrcaPresence-windows.zip` for that tag). A release published as latest without that asset makes the old exe's download fail silently. The exe's source is no longer on `main`; it is in the history before commit `2664b2e`. Before publishing a plugin release as latest, either attach a migration build of `OrcaPresence-windows.zip` to it (zip root holds `OrcaPresence.exe` with no wrapper folder) or leave "Set as the latest release" unchecked.

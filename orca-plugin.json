@@ -4,15 +4,15 @@
   "execution": "trusted-worker",
   "id": "discord-presence",
   "name": "Discord Rich Presence",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Show your active Orca workspace and agent on Discord while Orca is open.",
   "license": "MIT",
   "repository": "https://github.com/meryzennn/orca-discord-rpc",
   "engines": { "orca": ">=1.4.250" },
   "pluginApi": 1,
   "main": "plugin/runtime.mjs",
+  "cover": { "path": "docs/images/whale-tail.jpg", "alt": "Illustration: a whale tail rising from dark water above a presence chip that reads Oh My Pi, Idle." },
   "screenshots": [
-    { "path": "docs/images/whale-tail.jpg", "alt": "Illustration: a whale tail rising from dark water above a presence chip that reads Oh My Pi, Idle.", "caption": "Illustration of the presence status." },
     { "path": "docs/images/features.jpg", "alt": "Illustration: six feature tiles next to a Discord Playing card for the orca-discord-rpc workspace.", "caption": "Illustration of the main features." },
     { "path": "docs/images/orca-card.jpg", "alt": "Illustration: a Discord Playing card showing Orca, Oh My Pi, Idle, the folder orca-discord-rpc, and a View Repository button.", "caption": "Illustration of the Discord card." },
     { "path": "docs/images/plugin-overview.jpg", "alt": "Illustration: the Orca Discord Presence plugin sending a card to Discord, with the RPC and Incognito controls in Orca's status bar.", "caption": "Illustration of the plugin and its status bar controls." }
