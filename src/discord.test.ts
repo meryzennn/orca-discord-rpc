@@ -205,3 +205,57 @@ it('does not republish through a client whose explicit destruction failed', asyn
   await presence.destroy()
   assert.equal(fake.destroyed(), 1)
 })
+
+it('reports only the operation and safe error code, then clears it after recovery', async () => {
+  const fake = fakeClient()
+  let fail = true
+  fake.client.user.setActivity = async () => {
+    if (fail) throw Object.assign(new Error('secret-project secret-branch https://private/repo'), { code: 'EPIPE' })
+    return {}
+  }
+  const presence = createDiscordPresence('1', () => fake.client)
+  assert.equal(await presence.apply(activity), false)
+  assert.equal(presence.lastError?.(), 'Discord RPC apply failed (code: EPIPE)')
+  assert.ok(!presence.lastError?.()?.includes('secret-'))
+  fail = false
+  assert.equal(await presence.apply(activity), true)
+  assert.equal(presence.lastError?.(), null)
+  await presence.destroy()
+})
+
+it('reports login, clear and destroy codes without exposing exception messages', async () => {
+  for (const [operation, code] of [['login', 1], ['clear', 5], ['destroy', 'EPIPE']] as const) {
+    const fake = fakeClient()
+    const presence = createDiscordPresence('1', () => fake.client)
+    const fail = async (): Promise<void> => {
+      throw Object.assign(new Error('secret-project secret-branch'), { code })
+    }
+    if (operation === 'login') {
+      fake.client.login = fail
+      assert.equal(await presence.apply(activity), false)
+    } else {
+      await presence.apply(activity)
+      if (operation === 'clear') {
+        fake.client.user.clearActivity = fail
+        assert.equal(await presence.clear(), false)
+      } else {
+        fake.client.destroy = fail
+        await assert.rejects(presence.destroy())
+      }
+    }
+    assert.equal(presence.lastError?.(), `Discord RPC ${operation} failed (code: ${code})`)
+    fake.client.destroy = async () => {}
+    await presence.destroy()
+  }
+})
+
+it('does not echo an invalid error code into diagnostics', async () => {
+  const fake = fakeClient()
+  fake.client.user.setActivity = async () => {
+    throw Object.assign(new Error('secret-project'), { code: 'secret-project/branch' })
+  }
+  const presence = createDiscordPresence('1', () => fake.client)
+  assert.equal(await presence.apply(activity), false)
+  assert.equal(presence.lastError?.(), 'Discord RPC apply failed (code: unknown)')
+  await presence.destroy()
+})

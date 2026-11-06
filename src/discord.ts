@@ -9,6 +9,7 @@ export type DiscordPresence = {
   connectionGeneration: () => number
   /** True while the client believes it holds a live session. */
   isConnected: () => boolean
+  lastError?: () => string | null
 }
 
 /** The slice of the RPC client this transport uses, so a fake can stand in for it. */
@@ -36,6 +37,14 @@ export function createDiscordPresence(
   let connected = false
   let generation = 0
   let lifecycle = 0
+  let lastFailure: string | null = null
+
+  const failure = (operation: 'login' | 'apply' | 'clear' | 'destroy', error: unknown): void => {
+    const value = error !== null && typeof error === 'object' && 'code' in error ? error.code : null
+    const code = typeof value === 'number' && Number.isSafeInteger(value) ? String(value)
+      : typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : 'unknown'
+    lastFailure = `Discord RPC ${operation} failed (code: ${code})`
+  }
 
   const retire = async (current: DiscordRpcClientLike): Promise<void> => {
     if (client !== current) return
@@ -45,7 +54,10 @@ export function createDiscordPresence(
       await current.destroy()
     } catch (error) {
       // Failed cleanup must finish before a later attempt opens another socket.
-      if (client === null) client = current
+      if (client === null) {
+        client = current
+        failure('destroy', error)
+      }
       throw error
     }
   }
@@ -68,10 +80,11 @@ export function createDiscordPresence(
     })
     try {
       await next.login()
-    } catch {
+    } catch (error) {
       if (client === next) {
         connected = false
         generation += 1
+        failure('login', error)
         await retire(next).catch(() => {})
       }
       return null
@@ -99,11 +112,14 @@ export function createDiscordPresence(
         if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl
         if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl
         await user.setActivity(sdkActivity)
-        return client === active && connected
-      } catch {
+        if (client !== active || !connected) return false
+        lastFailure = null
+        return true
+      } catch (error) {
         if (active === null || client === active) {
           connected = false
           generation += 1
+          failure(active === null ? 'login' : 'apply', error)
         }
         return false
       }
@@ -112,23 +128,30 @@ export function createDiscordPresence(
       const current = client
       try {
         await current?.user?.clearActivity()
-        if (client === current) connected = false
+        if (client === current) {
+          connected = false
+          lastFailure = null
+        }
         return true
-      } catch {
+      } catch (error) {
         if (client === current) {
           connected = false
           generation += 1
+          failure('clear', error)
         }
         return false
       }
     },
     async destroy(): Promise<void> {
       lifecycle += 1
+      const epoch = lifecycle
       connected = false
       const current = client
       if (current) await retire(current)
+      if (epoch === lifecycle && client === null) lastFailure = null
     },
     connectionGeneration: () => generation,
-    isConnected: () => connected
+    isConnected: () => connected,
+    lastError: () => lastFailure
   }
 }

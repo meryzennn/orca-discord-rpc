@@ -9,6 +9,7 @@ import { createPluginSession } from './plugin-session.ts'
 import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
 import type { PresenceActivity } from './presence.ts'
 import type { PresenceState } from './presence-controller.ts'
+import type { PresenceRuntimeStatus } from './runtime.ts'
 
 it('declares a resident worker with a real status command and both refresh events', () => {
   const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
@@ -60,6 +61,7 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
   let get = async (key: string): Promise<unknown> => settings.get(key)
   let stateReads = 0
   let connected = false
+  let publishStatus: ((status: PresenceRuntimeStatus) => void) | null = null
   const orca: PluginApi = {
     log: message => { logs.push(message) },
     settings: {
@@ -79,6 +81,7 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
     host: { call: async (method, params) => { assert.equal(method, 'statusBar.update'); statuses.push(params) } }
   }
   const lifecycle = createPluginLifecycle(orca, legacy, (enabled, incognito, abort, onStatus) => {
+    publishStatus = onStatus
     signal = abort
     return createPluginSession({
       config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
@@ -103,6 +106,7 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
     lifecycle, commands, events, changes, reads, writes, logs, statuses, activities, order,
     stateReads: () => stateReads, signal: () => signal,
     setGet: (handler: typeof get) => { get = handler },
+    publishStatus: (status: PresenceRuntimeStatus) => publishStatus?.(status),
     change: (key: string, value: unknown) => { settings.set(key, value); changes.forEach(handler => handler({ key })) }
   }
 }
@@ -251,5 +255,26 @@ it('logs an invalid live setting and continues processing the next valid change'
     h.change('enabled', true)
     await setImmediate()
     assert.equal(h.activities[0]?.state, 'Folder: Private Project')
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('shows safe failures while waiting and paused help after a previous failure', async () => {
+  const h = harness({ incognito: true })
+  await h.lifecycle.activate()
+  await setImmediate()
+  try {
+    const status: PresenceRuntimeStatus = {
+      discordConnected: false, orcaRunning: true, paused: false,
+      lastActivity: null, lastPushAt: null, lastError: 'Discord RPC login failed (code: 1)'
+    }
+    h.publishStatus(status)
+    assert.equal(h.statuses.at(-1)?.text, 'RPC waiting')
+    assert.equal(h.statuses.at(-1)?.tooltip, status.lastError)
+    h.publishStatus({ ...status, paused: true })
+    assert.equal(h.statuses.at(-1)?.text, 'RPC paused')
+    assert.equal(h.statuses.at(-1)?.tooltip, 'Discord Rich Presence paused: click to resume')
+    h.publishStatus({ ...status, discordConnected: true, lastError: null })
+    assert.equal(h.statuses.at(-1)?.text, 'RPC')
+    assert.equal(h.statuses.at(-1)?.tooltip, 'Discord Rich Presence: click to pause or resume')
   } finally { await h.lifecycle.deactivate() }
 })

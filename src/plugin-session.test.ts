@@ -25,6 +25,7 @@ function harness(options: {
   failClear?: boolean
   failDestroy?: boolean
   failCancel?: boolean
+  transportError?: () => string | null
 } = {}) {
   const order: string[] = []
   const pushed: PresenceActivity[] = []
@@ -54,6 +55,7 @@ function harness(options: {
     transport: {
       apply: async (activity, canPublish) => {
         if (canPublish && !canPublish()) return false
+        if (options.transportError?.()) { connected = false; return false }
         order.push('apply'); pushed.push(activity); connected = true; return true
       },
       clear: async () => {
@@ -68,6 +70,7 @@ function harness(options: {
         if (options.failDestroy) throw new Error('destroy failed')
       },
       connectionGeneration: () => generation,
+      lastError: options.transportError,
       isConnected: () => connected
     }
   })
@@ -376,4 +379,18 @@ it('keeps one owned client across repeated privacy changes and ignores retired e
     }
   } finally { await session.stop() }
   assert.equal(clients.filter(client => !client.closed).length, 0)
+})
+
+it('surfaces an RPC failure in plugin logs/status and clears it on recovery', async () => {
+  let error: string | null = 'Discord RPC apply failed (code: EPIPE)'
+  const h = harness({ transportError: () => error })
+  await h.session.refresh()
+  assert.equal(h.statuses.at(-1)?.lastError, error)
+  assert.equal(h.statuses.at(-1)?.discordConnected, false)
+  assert.ok(h.logs.includes(error))
+  error = null
+  await h.session.refresh()
+  assert.equal(h.statuses.at(-1)?.lastError, null)
+  assert.equal(h.statuses.at(-1)?.discordConnected, true)
+  await h.session.stop()
 })

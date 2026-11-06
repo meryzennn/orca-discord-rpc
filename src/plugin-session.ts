@@ -32,6 +32,12 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
   let refreshJob: Promise<void> | null = null
   let shutdown: Promise<void> | null = null
   const report = (error: unknown): void => options.log(error instanceof Error ? error.message : String(error))
+  const destroyTransport = async (): Promise<void> => {
+    try { await options.transport.destroy() }
+    catch {
+      throw new Error(options.transport.lastError?.() ?? 'Discord RPC destroy failed (code: unknown)')
+    }
+  }
   const serial = (operation: () => Promise<void>): Promise<void> => {
     const job = tail.then(operation)
     tail = job.catch(report)
@@ -67,17 +73,26 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
         }
       },
       // The queued privacy change must close the old socket before any new push.
-      apply: activity => closed || privacyPending
-        ? Promise.resolve(false)
-        : options.transport.apply(activity, () => !closed && !privacyPending),
-      clear: options.transport.clear,
+      apply: async activity => {
+        if (closed || privacyPending) return false
+        const ok = await options.transport.apply(activity, () => !closed && !privacyPending)
+        const error = options.transport.lastError?.()
+        if (!ok && error) options.log(error)
+        return ok
+      },
+      clear: async () => {
+        const ok = await options.transport.clear()
+        const error = options.transport.lastError?.()
+        if (!ok && error) options.log(error)
+        return ok
+      },
       connectionGeneration: options.transport.connectionGeneration,
       schedule: (_tick, ms) => interval(() => { void refresh().catch(report) }, ms)
     }
   })
   const publish = (status: PresenceRuntimeStatus): void => options.onStatus({
     ...status, paused: !enabled, discordConnected: options.transport.isConnected(),
-    lastError: readError ?? status.lastError
+    lastError: readError ?? options.transport.lastError?.() ?? status.lastError
   })
   const unsubscribe = runtime.subscribe(publish)
   publish(runtime.getStatus())
@@ -97,7 +112,7 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
       return serial(async () => {
         if (!closed) {
           if (enabled) await runtime.pause().catch(report)
-          await options.transport.destroy()
+          await destroyTransport()
         }
         privacyPending = false
         if (!closed && enabled) await runtime.start()
@@ -111,7 +126,7 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
         try { await runtime.stop() }
         finally {
           try { await options.transport.clear() }
-          finally { await options.transport.destroy() }
+          finally { await destroyTransport() }
         }
       })
       return shutdown

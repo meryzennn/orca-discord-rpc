@@ -82,8 +82,10 @@ export function createPluginLifecycle(
         const current = startSession(enabled !== false, incognito, readerAbort.signal, status => {
           if (stopping) return
           const text = status.paused ? 'RPC paused' : status.discordConnected ? 'RPC' : 'RPC waiting'
+          const tooltip = status.paused ? 'Discord Rich Presence paused: click to resume'
+            : status.lastError ?? 'Discord Rich Presence: click to pause or resume'
           void orca.host.call('statusBar.update', {
-            id: 'presence', text, tooltip: status.lastError ?? 'Discord Rich Presence: click to pause or resume'
+            id: 'presence', text, tooltip
           }).catch(report)
         })
         session = current
