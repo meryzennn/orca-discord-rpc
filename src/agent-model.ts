@@ -1,4 +1,4 @@
-import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync, statSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -46,6 +46,10 @@ export function findAgentModel(
     } else if (agentType === 'omp') {
       const agentDir = nonEmpty(sources.env('PI_CODING_AGENT_DIR')) ?? join(sources.home, '.omp', 'agent')
       log = newestWorkspaceSession(join(agentDir, 'sessions'), worktreePath, 'omp')
+    } else if (agentType === 'antigravity' || agentType === 'agy') {
+      const agyHome = nonEmpty(sources.env('ANTIGRAVITY_HOME')) ?? join(sources.home, '.gemini', 'antigravity-cli')
+      const raw = newestAntigravityModel(agyHome, worktreePath)
+      return raw === null ? null : prettyModelName(raw)
     } else {
       return null
     }
@@ -229,3 +233,75 @@ function readSlice(path: string, end: 'head' | 'tail', bytes: number): string {
     closeSync(fd)
   }
 }
+
+export function lastAntigravityModelIn(text: string): string | null {
+  const regex = /`Model Selection` (?:from [^\n`]+ )?to ([^\n`]+?)(?:\.\s|\.\n|\.\\n|\.?<\/|\.?$)/g
+  let last: string | null = null
+  for (const match of text.matchAll(regex)) {
+    let val = match[1]?.trim()
+    if (val) {
+      val = val.replace(/\.?(\\n|\n)?$/, '').replace(/\.$/, '').trim()
+      if (val && !val.startsWith('<')) last = val
+    }
+  }
+  return last
+}
+
+function defaultAntigravityModel(agyHome: string): string | null {
+  for (const dir of [agyHome, join(agyHome, '..')]) {
+    const settings = join(dir, 'settings.json')
+    if (!existsSync(settings)) continue
+    try {
+      const raw: unknown = JSON.parse(readFileSync(settings, 'utf8').replace(/^\uFEFF/, ''))
+      if (raw && typeof raw === 'object' && 'model' in raw && typeof raw.model === 'string' && raw.model.trim()) {
+        return raw.model.trim()
+      }
+    } catch {}
+  }
+  return null
+}
+
+function newestAntigravityConversation(agyHome: string, worktreePath: string): string | null {
+  const history = join(agyHome, 'history.jsonl')
+  if (!existsSync(history)) return null
+  const wanted = normalizePath(worktreePath)
+  const fd = openSync(history, 'r')
+  try {
+    const size = fstatSync(fd).size
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES))
+    let position = Math.max(0, size - buffer.length)
+    while (position >= 0) {
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position)
+      const lines = buffer.toString('utf8', 0, read).split('\n')
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]?.trim()
+        if (!line) continue
+        try {
+          const entry: unknown = JSON.parse(line)
+          if (entry && typeof entry === 'object' && 'workspace' in entry && typeof entry.workspace === 'string') {
+            if (samePath(normalizePath(entry.workspace), wanted) && 'conversationId' in entry && typeof entry.conversationId === 'string') {
+              return entry.conversationId
+            }
+          }
+        } catch {}
+      }
+      if (position === 0) break
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES)
+    }
+  } finally { closeSync(fd) }
+  return null
+}
+
+export function newestAntigravityModel(agyHome: string, worktreePath: string): string | null {
+  if (!existsSync(agyHome)) return null
+  const conversationId = newestAntigravityConversation(agyHome, worktreePath)
+  if (conversationId) {
+    const transcript = join(agyHome, 'brain', conversationId, '.system_generated', 'logs', 'transcript.jsonl')
+    if (existsSync(transcript)) {
+      const fromTranscript = readLastModel(transcript, lastAntigravityModelIn)
+      if (fromTranscript) return fromTranscript
+    }
+  }
+  return defaultAntigravityModel(agyHome)
+}
+

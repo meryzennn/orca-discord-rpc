@@ -198,12 +198,72 @@ describe('findAgentModel', () => {
     assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Opus 5.5')
   })
 
+  it('reads Antigravity model changes from conversation transcript and uses model tooltip in both modes', () => {
+    freshHome()
+    const agyHome = join(home, '.gemini', 'antigravity-cli')
+    mkdirSync(agyHome, { recursive: true })
+    const convId = 'conv-test-123'
+    writeFileSync(join(agyHome, 'history.jsonl'), JSON.stringify({
+      workspace: '/home/me/app',
+      conversationId: convId,
+      timestamp: Date.now()
+    }) + '\n')
+    const transcriptDir = join(agyHome, 'brain', convId, '.system_generated', 'logs')
+    mkdirSync(transcriptDir, { recursive: true })
+    const transcriptFile = join(transcriptDir, 'transcript.jsonl')
+    writeFileSync(transcriptFile, JSON.stringify({
+      step_index: 0,
+      content: '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Gemini 3.8 Flash (High).\n</USER_SETTINGS_CHANGE>'
+    }) + '\n')
+    const sources = { env: noEnv, home }
+    assert.equal(findAgentModel('antigravity', '/home/me/app', sources), 'Gemini 3.8 Flash (High)')
+    assert.equal(findAgentModel('agy', '/home/me/app', sources), 'Gemini 3.8 Flash (High)')
+
+    for (const incognito of [false, true]) {
+      const activity = buildPluginActivity({
+        projectName: 'app',
+        agentType: 'antigravity',
+        runningAgentCount: 1,
+        startedAt: new Date('2026-11-06T00:00:00Z'),
+        useUploadedArt: true,
+        model: findAgentModel('antigravity', '/home/me/app', sources),
+        incognito
+      })
+      assert.equal(activity.smallImageKey, 'agy')
+      assert.equal(activity.smallImageText, 'Gemini 3.8 Flash (High)')
+    }
+
+    appendFileSync(transcriptFile, JSON.stringify({
+      step_index: 1,
+      content: '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from Gemini 3.8 Flash (High) to gemini-2.5-pro.\n</USER_SETTINGS_CHANGE>'
+    }) + '\n')
+    assert.equal(findAgentModel('antigravity', '/home/me/app', sources), 'Gemini 2.5 Pro')
+  })
+
+  it('falls back to Antigravity settings.json when no conversation transcript is recorded', () => {
+    freshHome()
+    const agyHome = join(home, '.gemini', 'antigravity-cli')
+    mkdirSync(agyHome, { recursive: true })
+    writeFileSync(join(agyHome, 'settings.json'), JSON.stringify({ model: 'Gemini 3.8 Flash (High)' }))
+    assert.equal(findAgentModel('antigravity', '/home/me/app', { env: noEnv, home }), 'Gemini 3.8 Flash (High)')
+  })
+
+  it('honours an explicit ANTIGRAVITY_HOME directory override', () => {
+    freshHome()
+    const custom = join(home, 'custom-agy')
+    mkdirSync(custom, { recursive: true })
+    writeFileSync(join(custom, 'settings.json'), JSON.stringify({ model: 'gemini-2.0-flash' }))
+    const sources = { home, env: (name: string) => name === 'ANTIGRAVITY_HOME' ? custom : undefined }
+    assert.equal(findAgentModel('antigravity', '/home/me/app', sources), 'Gemini 2.0 Flash')
+  })
+
   it('knows nothing for an unsupported agent or a missing log', () => {
     freshHome()
     assert.equal(findAgentModel('opencode', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('claude', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('omp', '/home/me/app', { env: noEnv, home }), null)
+    assert.equal(findAgentModel('antigravity', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel(null, '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('claude', null, { env: noEnv, home }), null)
   })

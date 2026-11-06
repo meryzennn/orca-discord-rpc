@@ -1,5 +1,5 @@
 // src/orca-plugin.ts
-import { readFileSync } from "node:fs";
+import { readFileSync as readFileSync2 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 
 // src/discord-ipc.ts
@@ -574,7 +574,7 @@ function runningAgentCount(worktree) {
 }
 
 // src/agent-model.ts
-import { closeSync, existsSync as existsSync2, fstatSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync as existsSync2, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { basename, join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 var TAIL_BYTES = 64 * 1024;
@@ -599,6 +599,10 @@ function findAgentModel(agentType, worktreePath, sources = defaultSources) {
     } else if (agentType === "omp") {
       const agentDir = nonEmpty(sources.env("PI_CODING_AGENT_DIR")) ?? join2(sources.home, ".omp", "agent");
       log = newestWorkspaceSession(join2(agentDir, "sessions"), worktreePath, "omp");
+    } else if (agentType === "antigravity" || agentType === "agy") {
+      const agyHome = nonEmpty(sources.env("ANTIGRAVITY_HOME")) ?? join2(sources.home, ".gemini", "antigravity-cli");
+      const raw2 = newestAntigravityModel(agyHome, worktreePath);
+      return raw2 === null ? null : prettyModelName(raw2);
     } else {
       return null;
     }
@@ -745,6 +749,77 @@ function readSlice(path, end, bytes) {
   } finally {
     closeSync(fd);
   }
+}
+function lastAntigravityModelIn(text2) {
+  const regex = /`Model Selection` (?:from [^\n`]+ )?to ([^\n`]+?)(?:\.\s|\.\n|\.\\n|\.?<\/|\.?$)/g;
+  let last = null;
+  for (const match of text2.matchAll(regex)) {
+    let val = match[1]?.trim();
+    if (val) {
+      val = val.replace(/\.?(\\n|\n)?$/, "").replace(/\.$/, "").trim();
+      if (val && !val.startsWith("<")) last = val;
+    }
+  }
+  return last;
+}
+function defaultAntigravityModel(agyHome) {
+  for (const dir of [agyHome, join2(agyHome, "..")]) {
+    const settings = join2(dir, "settings.json");
+    if (!existsSync2(settings)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(settings, "utf8").replace(/^\uFEFF/, ""));
+      if (raw && typeof raw === "object" && "model" in raw && typeof raw.model === "string" && raw.model.trim()) {
+        return raw.model.trim();
+      }
+    } catch {
+    }
+  }
+  return null;
+}
+function newestAntigravityConversation(agyHome, worktreePath) {
+  const history = join2(agyHome, "history.jsonl");
+  if (!existsSync2(history)) return null;
+  const wanted = normalizePath(worktreePath);
+  const fd = openSync(history, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
+    let position = Math.max(0, size - buffer.length);
+    while (position >= 0) {
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
+      const lines = buffer.toString("utf8", 0, read).split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]?.trim();
+        if (!line) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry && typeof entry === "object" && "workspace" in entry && typeof entry.workspace === "string") {
+            if (samePath(normalizePath(entry.workspace), wanted) && "conversationId" in entry && typeof entry.conversationId === "string") {
+              return entry.conversationId;
+            }
+          }
+        } catch {
+        }
+      }
+      if (position === 0) break;
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return null;
+}
+function newestAntigravityModel(agyHome, worktreePath) {
+  if (!existsSync2(agyHome)) return null;
+  const conversationId = newestAntigravityConversation(agyHome, worktreePath);
+  if (conversationId) {
+    const transcript = join2(agyHome, "brain", conversationId, ".system_generated", "logs", "transcript.jsonl");
+    if (existsSync2(transcript)) {
+      const fromTranscript = readLastModel(transcript, lastAntigravityModelIn);
+      if (fromTranscript) return fromTranscript;
+    }
+  }
+  return defaultAntigravityModel(agyHome);
 }
 
 // src/orca-reader.ts
@@ -1416,7 +1491,7 @@ function createPluginSession(options) {
 // src/orca-plugin.ts
 function readLegacyConfig(path) {
   try {
-    const value = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+    const value = JSON.parse(readFileSync2(path, "utf8").replace(/^\uFEFF/, ""));
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
   } catch {
     return null;

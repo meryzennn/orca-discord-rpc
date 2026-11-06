@@ -64,7 +64,7 @@ An idle agent shows `Idle`. A suffix such as `+1` counts the other open agent pa
 | Repository button | Workspace's Git `origin`, when valid | Hidden |
 | Timer | Current session duration | Same |
 
-Model lookup supports **Codex, Claude Code, and Oh My Pi**. The plugin reads their saved session metadata for the workspace. OMP records model changes separately from replies; the plugin picks them up on the next poll. Auxiliary usage, such as a judge model, does not replace the conversation model. If the plugin cannot read the model, it uses the agent name in the tooltip.
+Model lookup supports **Codex, Claude Code, Oh My Pi, and Antigravity**. The plugin reads their saved session metadata for the workspace. OMP and Antigravity record model changes separately from replies; the plugin picks them up on the next poll. Auxiliary usage, such as a judge model, does not replace the conversation model. If the plugin cannot read the model, it uses the agent name in the tooltip.
 
 Agent icons use public image URLs by default. Uploaded Discord artwork is optional; see [Settings](#settings).
 
