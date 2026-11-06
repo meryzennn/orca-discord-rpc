@@ -31649,7 +31649,7 @@ import { homedir as homedir2 } from "node:os";
 var TAIL_BYTES = 64 * 1024;
 var MODEL_OVERLAP_BYTES = 1024;
 var HEAD_BYTES = 16 * 1024;
-var CODEX_SESSIONS_SCANNED = 50;
+var SESSIONS_SCANNED = 50;
 var MODEL_FIELD = /"model":"([^"]+)"/g;
 var CWD_FIELD = /"cwd":("(?:[^"\\]|\\.)*")/;
 var IS_WINDOWS = process.platform === "win32";
@@ -31663,11 +31663,15 @@ function findAgentModel(agentType, worktreePath, sources = defaultSources) {
     if (agentType === "claude" || agentType === "claude-agent-teams") {
       log = newestClaudeSession(nonEmpty(sources.env("CLAUDE_CONFIG_DIR")) ?? join2(sources.home, ".claude"), worktreePath);
     } else if (agentType === "codex") {
-      log = newestCodexSession(nonEmpty(sources.env("CODEX_HOME")) ?? join2(sources.home, ".codex"), worktreePath);
+      const codexHome = nonEmpty(sources.env("CODEX_HOME")) ?? join2(sources.home, ".codex");
+      log = newestWorkspaceSession(join2(codexHome, "sessions"), worktreePath, "codex");
+    } else if (agentType === "omp") {
+      const agentDir = nonEmpty(sources.env("PI_CODING_AGENT_DIR")) ?? join2(sources.home, ".omp", "agent");
+      log = newestWorkspaceSession(join2(agentDir, "sessions"), worktreePath, "omp");
     } else {
       return null;
     }
-    const raw = log === null ? null : readLastModel(log);
+    const raw = log === null ? null : readLastModel(log, agentType === "omp" ? lastOmpModelIn : lastModelIn);
     return raw === null ? null : prettyModelName(raw);
   } catch {
     return null;
@@ -31744,16 +31748,16 @@ function newestClaudeSession(claudeHome, worktreePath) {
   );
   return newestOf(files);
 }
-function newestCodexSession(codexHome, worktreePath) {
-  const sessions = join2(codexHome, "sessions");
+function newestWorkspaceSession(sessions, worktreePath, layout) {
   if (!existsSync(sessions)) {
     return null;
   }
   const wanted = normalizePath(worktreePath);
-  const recent = readdirSync(sessions, { recursive: true, encoding: "utf8" }).filter((name) => basename(name).startsWith("rollout-") && name.endsWith(".jsonl")).map((name) => {
+  const names = layout === "codex" ? readdirSync(sessions, { recursive: true, encoding: "utf8" }).filter((name) => basename(name).startsWith("rollout-") && name.endsWith(".jsonl")) : readdirSync(sessions, { withFileTypes: true }).flatMap((bucket) => bucket.isDirectory() ? readdirSync(join2(sessions, bucket.name), { withFileTypes: true }).filter((file) => file.isFile() && file.name.endsWith(".jsonl")).map((file) => join2(bucket.name, file.name)) : []);
+  const recent = names.map((name) => {
     const file = join2(sessions, name);
     return { file, at: statSync(file).mtimeMs };
-  }).sort((a, b) => b.at - a.at).slice(0, CODEX_SESSIONS_SCANNED);
+  }).sort((a, b) => b.at - a.at).slice(0, SESSIONS_SCANNED);
   for (const { file } of recent) {
     const cwd = CWD_FIELD.exec(readSlice(file, "head", HEAD_BYTES))?.[1];
     if (cwd !== void 0 && samePath(normalizePath(JSON.parse(cwd)), wanted)) {
@@ -31765,7 +31769,25 @@ function newestCodexSession(codexHome, worktreePath) {
 function normalizePath(path) {
   return path.replace(/\\/g, "/").replace(/\/+$/, "");
 }
-function readLastModel(path) {
+function lastOmpModelIn(text2) {
+  let last = null;
+  for (const line of text2.split("\n")) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry === null || typeof entry !== "object" || !("type" in entry)) continue;
+      let model = null;
+      if (entry.type === "model_change" && "model" in entry) model = entry.model;
+      else if (entry.type === "message" && "message" in entry) {
+        const message = entry.message;
+        if (message !== null && typeof message === "object" && "role" in message && message.role === "assistant" && "model" in message) model = message.model;
+      }
+      if (typeof model === "string" && model.trim() && !model.startsWith("<")) last = model;
+    } catch {
+    }
+  }
+  return last;
+}
+function readLastModel(path, parse) {
   const fd = openSync(path, "r");
   try {
     const size = fstatSync(fd).size;
@@ -31773,7 +31795,7 @@ function readLastModel(path) {
     let position = Math.max(0, size - TAIL_BYTES);
     while (true) {
       const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
-      const model = lastModelIn(buffer.toString("utf8", 0, read));
+      const model = parse(buffer.toString("utf8", 0, read));
       if (model !== null || position === 0) return model;
       position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
     }
@@ -32527,6 +32549,22 @@ function createPluginLifecycle(orca, legacy, startSession) {
     settingsWork = job.catch(report);
     return job;
   };
+  const toggleSetting = (key) => queueSetting(async () => {
+    const value = await orca.settings.get(key);
+    if (stopping) return;
+    if (typeof value !== "boolean" && (key === "incognito" || value != null)) {
+      throw new Error(`${key} setting must be boolean`);
+    }
+    return orca.settings.set(key, value === false);
+  });
+  const updateIncognito = (value) => {
+    if (stopping) return;
+    void orca.host.call("statusBar.update", {
+      id: "incognito",
+      text: value ? "Incognito On" : "Incognito Off",
+      tooltip: value ? "Incognito on: project and repository hidden. Click to turn off." : "Incognito off: click to hide project and repository."
+    }).catch(report);
+  };
   const deactivate2 = () => {
     if (shutdown) return shutdown;
     stopping = true;
@@ -32571,15 +32609,12 @@ function createPluginLifecycle(orca, legacy, startSession) {
           }).catch(report);
         });
         session = current;
+        updateIncognito(incognito);
         const refresh = () => {
           if (!stopping) void current.refresh().catch(report);
         };
-        subscriptions.push(orca.commands.register("presence.toggle", () => queueSetting(async () => {
-          const value = await orca.settings.get("enabled");
-          if (stopping) return;
-          if (value != null && typeof value !== "boolean") throw new Error("enabled setting must be boolean");
-          return orca.settings.set("enabled", value === false);
-        })));
+        subscriptions.push(orca.commands.register("presence.toggle", () => toggleSetting("enabled")));
+        subscriptions.push(orca.commands.register("presence.incognito.toggle", () => toggleSetting("incognito")));
         subscriptions.push(orca.events.on("workspace.changed", refresh));
         subscriptions.push(orca.events.on("agent.status.changed", refresh));
         subscriptions.push(orca.settings.onDidChange(({ key }) => {
@@ -32589,6 +32624,7 @@ function createPluginLifecycle(orca, legacy, startSession) {
             if (stopping) return;
             if (typeof value !== "boolean") throw new Error(`${key} setting must be boolean`);
             void (key === "enabled" ? current.setEnabled(value) : current.setIncognito(value)).catch(report);
+            if (key === "incognito") updateIncognito(value);
           });
         }));
         refresh();
