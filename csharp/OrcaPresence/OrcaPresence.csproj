@@ -7,7 +7,6 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>OrcaPresence</AssemblyName>
     <RootNamespace>OrcaPresence</RootNamespace>
-    <!-- Why: the exe icon comes from the .ico generated out of orca-rpc.png. -->
     <ApplicationIcon>../../build/app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

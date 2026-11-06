@@ -116,8 +116,6 @@ OMP lookup uses the standard `~/.omp/agent/sessions` layout. Custom profiles, cu
 
 The current plugin uses Node built-ins for Discord IPC and has no npm runtime dependencies. A controlled comparison on Windows used the same Orca executable, a Ryzen 5 5500, and 12 logical CPUs. Both bundles were imported into isolated workers with presence paused, without Discord connections or workspace polling:
 
-Bun is not used in this version. Orca selects Node.js for the plugin worker, so using Bun as a package manager or build tool would leave that runtime in place. The measured change below comes from replacing the RPC SDK with minimal Node IPC; no Bun or Rust memory benchmark is claimed.
-
 | Metric | Previous SDK bundle | Minimal IPC bundle |
 | --- | --- | --- |
 | Bundle size | 1,400,511 bytes | 52,927 bytes |
