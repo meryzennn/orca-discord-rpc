@@ -178,6 +178,44 @@ namespace OrcaPresence.Tests
             Assert.Null(a.Buttons);
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void OhMyPiUsesItsOwnArtworkInIncognito(bool uploaded)
+        {
+            const string logoUrl = "https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png";
+            var activity = Presence.BuildActivity(new PresenceInput
+            {
+                ProjectName = "secret-project",
+                AgentType = "omp",
+                OpenAgentCount = 2,
+                AgentActive = true,
+                BranchName = "private-branch",
+                RepoUrl = "https://github.com/example/private-repo",
+                Incognito = true,
+                UseUploadedArt = uploaded,
+                StartedAt = Started
+            });
+
+            Assert.Equal("Agent: Oh My Pi +1 · Working", activity.Details);
+            Assert.Equal("Folder: Private Project", activity.State);
+            Assert.Equal("Agent: Oh My Pi", activity.SmallImageText);
+            Assert.Equal(uploaded ? "omp" : null, activity.SmallImageKey);
+            Assert.Equal(uploaded ? null : logoUrl, activity.SmallImageUrl);
+            Assert.Null(activity.Buttons);
+        }
+
+        [Fact]
+        public void OhMyPiKeepsTheBranchIconInNormalMode()
+        {
+            var activity = Build("orca-discord-rpc", "omp", 1, branch: "main");
+
+            Assert.Equal("Agent: Oh My Pi · Working", activity.Details);
+            Assert.Equal("Folder: orca-discord-rpc", activity.State);
+            Assert.Equal("main", activity.SmallImageText);
+            Assert.Equal(AgentArt.BranchIconUrl, activity.SmallImageUrl);
+        }
+
         [Fact]
         public void IncognitoIdleShowsPrivateProjectIdleAndAgentIcon()
         {

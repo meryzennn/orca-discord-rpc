@@ -23,6 +23,7 @@ namespace OrcaPresence
             ["codex"] = "codex",
             ["opencode"] = "opencode",
             ["opencode2"] = "opencode",
+            ["omp"] = "omp",
             ["command-code"] = "commandcode",
             ["dsh"] = "deepsek-harnnes",
             ["grok"] = "grock",
@@ -61,6 +62,11 @@ namespace OrcaPresence
 
         public static string? GetAgentIconUrl(string agentType)
         {
+            if (string.Equals(agentType, "omp", StringComparison.OrdinalIgnoreCase))
+            {
+                return "https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png";
+            }
+
             if (AgentIconDomains.TryGetValue(agentType, out var domain))
             {
                 return "https://www.google.com/s2/favicons?domain=" + domain + "&sz=128";

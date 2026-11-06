@@ -83,6 +83,7 @@ namespace OrcaPresence
             ["claude-agent-teams"] = "Claude",
             ["opencode"] = "OpenCode",
             ["opencode2"] = "OpenCode",
+            ["omp"] = "Oh My Pi",
             ["qwen-code"] = "Qwen Code"
         };
 
