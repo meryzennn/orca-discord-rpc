@@ -65,7 +65,8 @@ export function runOrcaWorktreePs(command: string = ORCA_COMMAND, nodeEntry?: st
 }
 
 export async function readPresenceState(
-  runWorktreePs: () => Promise<string> = runOrcaWorktreePs
+  runWorktreePs: () => Promise<string> = runOrcaWorktreePs,
+  resolveRepoUrl?: (path: string) => Promise<string | null>
 ): Promise<PresenceState | null> {
   const worktrees = parseWorktreePs(await runWorktreePs())
   const active = selectActiveWorktree(worktrees)
@@ -81,6 +82,8 @@ export async function readPresenceState(
     model: findAgentModel(agentType, typeof active.path === 'string' ? active.path : null),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
-    branchName: branchNameFor(active)
+    branchName: branchNameFor(active),
+    ...(resolveRepoUrl ? { repoUrl: typeof active.path === 'string' && active.path.length > 0
+      ? await resolveRepoUrl(active.path) : null } : {})
   }
 }

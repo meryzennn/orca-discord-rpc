@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPresenceController, type PresenceState } from './presence-controller.ts'
+import { buildTrayActivity } from './tray-presence.ts'
+import type { PresenceActivity } from './presence.ts'
 
 const T0 = new Date('2026-10-05T00:00:00.000Z')
 const T1 = new Date('2026-10-05T00:01:00.000Z')
@@ -47,6 +49,27 @@ const RUNNING: PresenceState = {
   agentActive: true,
   branchName: 'main',
 }
+
+it('uses the injected tray builder and republishes origin edits without resetting the timer', async () => {
+  const applied: PresenceActivity[] = []
+  let state = { ...RUNNING, repoUrl: 'https://github.com/owner/first' }
+  let now = T0
+  const controller = createPresenceController({
+    readState: async () => state, buildActivity: buildTrayActivity,
+    apply: async activity => { applied.push(activity); return true },
+    clear: async () => true, now: () => now
+  })
+  await controller.poll()
+  await controller.poll()
+  now = T1
+  state = { ...state, repoUrl: 'https://github.com/owner/second' }
+  await controller.poll()
+  assert.equal(applied.length, 2)
+  assert.equal(applied[0]?.details, 'Agent: Claude · Working')
+  assert.equal(applied[1]?.state, 'Folder: orca')
+  assert.deepEqual(applied[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/owner/second' }])
+  assert.equal(applied[1]?.startTimestamp, T0)
+})
 
 describe('createPresenceController', () => {
   it('applies the first reading', async () => {

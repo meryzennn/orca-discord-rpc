@@ -9,7 +9,7 @@ import { createDiscordPresence } from './discord.ts'
 
 const state: PresenceState = {
   projectName: 'secret-project', agentType: 'omp', runningAgentCount: 1,
-  agentActive: true, branchName: 'secret-branch'
+  agentActive: true, branchName: 'secret-branch', repoUrl: 'https://github.com/secret-owner/secret-repo'
 }
 
 function deferred() {
@@ -86,11 +86,16 @@ it('redacts private state before the reused builder and clears before changing p
   const json = JSON.stringify(h.pushed[0])
   assert.ok(!json.includes('secret-project'))
   assert.ok(!json.includes('secret-branch'))
-  assert.equal(h.pushed[0]?.state, 'Private Project · Working')
-  assert.equal(h.pushed[0]?.details, 'Oh My Pi')
+  assert.ok(!json.includes('secret-repo'))
+  assert.equal(h.pushed[0]?.state, 'Folder: Private Project')
+  assert.equal(h.pushed[0]?.details, 'Agent: Oh My Pi · Working')
+  assert.equal(h.pushed[0]?.smallImageText, 'Agent: Oh My Pi')
+  assert.equal(h.pushed[0]?.buttons, undefined)
   await h.session.setIncognito(false)
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
-  assert.equal(h.pushed[1]?.state, 'secret-project · Working')
+  assert.equal(h.pushed[1]?.state, 'Folder: secret-project')
+  assert.equal(h.pushed[1]?.smallImageText, 'secret-branch')
+  assert.deepEqual(h.pushed[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/secret-owner/secret-repo' }])
   await h.session.stop()
 })
 
@@ -124,7 +129,7 @@ it('clears and closes the previous socket before a pending poll republishes chan
   gate.resolve()
   await Promise.all([pending, privateMode])
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
-  assert.equal(h.pushed[1]?.state, 'Private Project · Working')
+  assert.equal(h.pushed[1]?.state, 'Folder: Private Project')
   assert.ok(!JSON.stringify(h.pushed[1]).includes('secret-branch'))
   await h.session.stop()
 })
@@ -166,7 +171,7 @@ it('starts paused and uses the latest privacy setting on resume', async () => {
   assert.equal(h.reads(), 0)
   assert.deepEqual(h.order, ['destroy'])
   await h.session.setEnabled(true)
-  assert.equal(h.pushed[0]?.state, 'Private Project · Working')
+  assert.equal(h.pushed[0]?.state, 'Folder: Private Project')
   await h.session.setEnabled(true)
   await h.session.setIncognito(true)
   assert.equal(h.reads(), 1)
@@ -231,7 +236,7 @@ it('prevents a public request after Incognito intent during real transport login
   const privateMode = h.session.setIncognito(true)
   h.gate.resolve()
   await Promise.all([pending, privateMode])
-  assert.deepEqual(h.order, ['login', 'clear', 'destroy', 'login', 'send:Private Project · Working'])
+  assert.deepEqual(h.order, ['login', 'clear', 'destroy', 'login', 'send:Folder: Private Project'])
   assert.equal(h.sent.length, 1)
   assert.ok(!JSON.stringify(h.sent).includes('secret-project'))
   assert.ok(!JSON.stringify(h.sent).includes('secret-branch'))
@@ -272,7 +277,7 @@ it('closes the old socket after a failed privacy clear before republishing', asy
   await h.session.refresh()
   await h.session.setIncognito(true)
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
-  assert.equal(h.pushed[1]?.state, 'Private Project · Working')
+  assert.equal(h.pushed[1]?.state, 'Folder: Private Project')
   assert.ok(h.logs.includes('clear failed'))
   await assert.rejects(h.session.stop(), /clear failed/)
 })
@@ -285,7 +290,7 @@ it('closes the old public socket when privacy changes while paused after a faile
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy'])
   assert.equal(h.reads(), 1)
   await h.session.setEnabled(true)
-  assert.equal(h.pushed[1]?.state, 'Private Project · Working')
+  assert.equal(h.pushed[1]?.state, 'Folder: Private Project')
   await assert.rejects(h.session.stop(), /clear failed/)
 })
 

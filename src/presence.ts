@@ -37,6 +37,7 @@ export type PresenceInput = {
   agentActive?: boolean
   /** Shown as the branch icon's tooltip; the second line carries the status instead. */
   branchName?: string | null
+  repoUrl?: string | null
   startedAt: Date
   /**
    * True when the artwork has been uploaded to the Discord application. Discord will not
@@ -56,6 +57,7 @@ export type PresenceActivity = {
   smallImageKey?: string
   smallImageUrl?: string
   smallImageText?: string
+  buttons?: { label: string; url: string }[]
 }
 
 export function agentDisplayName(agentType: string): string {

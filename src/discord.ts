@@ -66,7 +66,11 @@ export function createDiscordPresence(
         if (!user || canPublish?.() === false) {
           return false
         }
-        await user.setActivity(activity)
+        // Our URL fields are fallback image sources; the SDK's URL fields are click links.
+        const { largeImageUrl, smallImageUrl, ...sdkActivity } = activity
+        if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl
+        if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl
+        await user.setActivity(sdkActivity)
         return true
       } catch {
         // Why reset: a dropped connection must force a fresh login on the next attempt.

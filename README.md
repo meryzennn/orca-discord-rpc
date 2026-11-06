@@ -49,9 +49,9 @@ RPC starts with Orca and runs in Orca's managed background worker, without openi
 
 Before migrating, stop the old presence provider yourself. On Windows, untick Start with Windows and quit the old tray app; on macOS/Linux, stop the existing headless daemon if you use it. Do not run two presence providers together. The plugin does not change OS autostart settings.
 
-On first startup, the plugin copies Incognito from the existing `config.json` only when no plugin value is saved. Later changes stay in Orca's plugin settings. Incognito replaces the folder with `Private Project` and removes the actual branch; the old activity is cleared before the privacy update is published. The public Discord application id, poll interval and uploaded-art flag still come from that file or built-in defaults. See [Configuration](#configuration) for file locations and worker environment limits.
+On first startup, the plugin copies Incognito from the existing `config.json` only when no plugin value is saved. Later changes stay in Orca's plugin settings. Incognito shows `Folder: Private Project`, hides the actual branch and repository button, and uses the small agent/model icon; the old activity is cleared before the privacy update is published. The public Discord application id, poll interval and uploaded-art flag still come from that file or built-in defaults. See [Configuration](#configuration) for file locations and worker environment limits.
 
-The first plugin version uses the existing headless presence layout and large agent-icon slot. The View Repository button and the standalone C# app's different normal/Incognito layouts remain features of the separate Windows app. Plugin memory use has not been measured.
+The plugin uses the same presence labels and normal/Incognito icon slots as the Windows tray app. In normal mode it reads the active workspace's local Git `origin` for a View Repository button, removing credentials, ports, query strings and fragments before publishing the web URL. Missing Git or an unavailable origin leaves the button hidden. Plugin memory use has not been measured.
 
 Real Orca/Discord lifecycle acceptance and remote Windows/macOS/Linux CI runs are still pending. The [manual acceptance checklist](#manual-plugin-acceptance) records those checks separately from automated payload and bundle checks.
 
@@ -91,19 +91,20 @@ The entry lives under `HKEY_CURRENT_USER`, so no administrator rights are needed
 
 ## What Discord shows
 
-### Plugin and headless daemon
+### Standalone headless daemon
 
-With an agent open, line 1 reads `Claude +1` and line 2 reads `orca-discord-rpc · Working` or `orca-discord-rpc · Idle`. The large icon uses agent artwork or an Orca fallback, with the model in its tooltip when available; the small branch icon shows the branch in its tooltip. With no agent open, line 1 reads `Using Orca` and line 2 shows the folder. Both retain the session timer. The plugin's Incognito setting changes the folder to `Private Project` and leaves no actual branch in the tooltip. This layout has no View Repository button.
+With an agent open, line 1 reads `Claude +1` and line 2 reads `orca-discord-rpc · Working` or `orca-discord-rpc · Idle`. The large icon uses agent artwork or an Orca fallback, with the model in its tooltip when available; the small branch icon shows the branch in its tooltip. With no agent open, line 1 reads `Using Orca` and line 2 shows the folder. Both retain the session timer. This layout has no View Repository button.
 
-### Standalone Windows app
+### Orca plugin and standalone Windows app
 
 | Field | Normal | Incognito |
 | --- | --- | --- |
 | Line 1 | `Agent: Claude +1 · Working` | Same |
 | Line 2 | `Folder: orca-discord-rpc` | `Folder: Private Project` |
 | Timer | Time since the session started | Same |
+| Large icon | Orca, when uploaded artwork is enabled | Same |
 | Small icon | Branch icon; hovering shows the branch name | Agent icon; hovering shows the model, such as `Claude Opus 5.5` |
-| Button | View Repository, when the workspace has an `origin` remote | None |
+| Button | View Repository, when the workspace has a valid web-compatible `origin` remote | None |
 
 With no agent open, line 1 reads `Using Orca` and line 2 shows the folder.
 
@@ -185,7 +186,7 @@ For standalone modes, environment variables win over the file; the Linux daemon 
 
 For the plugin, set `clientId`, `pollMs` and `useUploadedArt` in the file and reload the plugin after editing them. Manage Incognito in Orca's plugin settings after its first-run migration. Orca scrubs shell environment overrides from workers, so `ORCA_DISCORD_*`, `CODEX_HOME` and `CLAUDE_CONFIG_DIR` overrides are not supported configuration routes in plugin mode.
 
-Oh My Pi is recognized as `omp` and displayed as `Oh My Pi`. In the Windows tray app, its logo occupies the small agent-icon slot during Incognito Mode; normal mode keeps the branch icon. The public-image fallback uses the [official upstream PNG](https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png). If Discord does not render that URL, upload the PNG to your Discord application's Rich Presence art assets with the key `omp`, then enable `useUploadedArt` for that application. This setting also makes the existing icons use their uploaded keys, so the application needs the other assets you use, including `orca` and `git-branch`. The plugin and headless daemon display the same Oh My Pi logo in their existing large agent-icon slot.
+Oh My Pi is recognized as `omp` and displayed as `Oh My Pi`. In the plugin and Windows tray app, its logo occupies the small agent-icon slot during Incognito Mode; normal mode keeps the branch icon. The public-image fallback uses the [official upstream PNG](https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png). If Discord does not render that URL, upload the PNG to your Discord application's Rich Presence art assets with the key `omp`, then enable `useUploadedArt` for that application. This setting also makes the existing icons use their uploaded keys, so the application needs the other assets you use, including `orca` and `git-branch`. The standalone headless daemon keeps this logo in its large agent-icon slot.
 
 ---
 

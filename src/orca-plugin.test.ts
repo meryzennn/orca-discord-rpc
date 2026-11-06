@@ -116,7 +116,7 @@ it('migrates only a legacy boolean before the first push and preserves saved Inc
       await h.lifecycle.activate()
       await setImmediate()
       assert.deepEqual(h.writes, migrated ? [['incognito', expected]] : [])
-      assert.equal(h.activities[0]?.state, expected ? 'Private Project · Working' : 'secret-project · Working')
+      assert.equal(h.activities[0]?.state, expected ? 'Folder: Private Project' : 'Folder: secret-project')
       if (expected) assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     } finally { await h.lifecycle.deactivate() }
   }
@@ -190,7 +190,7 @@ it('wires native pause/resume, both event refreshes, and live privacy changes', 
     h.change('incognito', true)
     await setImmediate()
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'destroy', 'apply'])
-    assert.equal(h.activities.at(-1)?.state, 'Private Project · Working')
+    assert.equal(h.activities.at(-1)?.state, 'Folder: Private Project')
     assert.ok(!JSON.stringify(h.activities.at(-1)).includes('secret-branch'))
   } finally { await h.lifecycle.deactivate() }
 })
@@ -229,7 +229,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
     gate.resolve()
     await setImmediate()
     assert.equal(h.activities.length, 1)
-    assert.equal(h.activities[0]?.state, 'Private Project · Working')
+    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
     assert.ok(!JSON.stringify(h.activities).includes('secret-project'))
     assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     assert.deepEqual(h.order, ['clear', 'destroy', 'apply'])
@@ -250,6 +250,6 @@ it('logs an invalid live setting and continues processing the next valid change'
     await assert.rejects(h.commands.get('presence.toggle')!(), /enabled setting must be boolean/)
     h.change('enabled', true)
     await setImmediate()
-    assert.equal(h.activities[0]?.state, 'Private Project · Working')
+    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
   } finally { await h.lifecycle.deactivate() }
 })

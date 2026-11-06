@@ -2,12 +2,41 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDiscordPresence } from './discord.ts'
 import type { PresenceActivity } from './presence.ts'
+import { ClientUser } from '@xhayper/discord-rpc'
 
 const activity: PresenceActivity = {
   details: 'Claude',
   state: 'orca',
   startTimestamp: new Date('2026-10-05T00:00:00.000Z')
 }
+
+it('serializes project fallback image sources as SDK image assets, with keys taking precedence', async () => {
+  const requests: { activity: { assets: Record<string, string>; buttons?: unknown } }[] = []
+  const client = {
+    request: async (_command: string, args: typeof requests[number]) => {
+      requests.push(args)
+      return { data: {} }
+    }
+  }
+  const user = new ClientUser(client as never, { id: '1' } as never)
+  const presence = createDiscordPresence('1', () => ({
+    on: () => {}, login: async () => {}, destroy: async () => {}, user
+  }))
+  const buttons = [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
+  const fallback = {
+    ...activity, largeImageUrl: 'https://example.com/large.png',
+    smallImageUrl: 'https://example.com/small.png', buttons
+  }
+  assert.equal(await presence.apply(fallback), true)
+  assert.deepEqual(requests[0]?.activity.assets, {
+    large_image: 'https://example.com/large.png', small_image: 'https://example.com/small.png'
+  })
+  assert.deepEqual(requests[0]?.activity.buttons, buttons)
+  assert.equal(await presence.apply({ ...fallback, largeImageKey: 'orca', smallImageKey: 'git-branch' }), true)
+  assert.deepEqual(requests[1]?.activity.assets, { large_image: 'orca', small_image: 'git-branch' })
+  assert.equal(fallback.largeImageUrl, 'https://example.com/large.png')
+  await presence.destroy()
+})
 
 /** A stand-in for the RPC client, so no Discord is needed and failures can be forced. */
 function fakeClient(options: { failLogin?: boolean; failSet?: boolean; login?: () => Promise<void> } = {}) {

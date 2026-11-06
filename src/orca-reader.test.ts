@@ -8,6 +8,20 @@ import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { pluginCliEnv, readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
 
+it('resolves the active workspace origin on each plugin reading, without resolving absent paths', async () => {
+  let origin = 'https://github.com/owner/first'
+  const snapshot = (path?: string) => async () => JSON.stringify({ ok: true, result: { worktrees: [
+    { isActive: false, path: '/inactive' }, { isActive: true, path, agents: [] }
+  ] } })
+  const paths: string[] = []
+  const resolveRepo = async (path: string) => { paths.push(path); return origin }
+  assert.equal((await readPresenceState(snapshot('/active'), resolveRepo))?.repoUrl, origin)
+  origin = 'https://github.com/owner/second'
+  assert.equal((await readPresenceState(snapshot('/active'), resolveRepo))?.repoUrl, origin)
+  assert.equal((await readPresenceState(snapshot(), resolveRepo))?.repoUrl, null)
+  assert.deepEqual(paths, ['/active', '/active'])
+})
+
 it('fills only the missing Windows plugin APPDATA known folder without mutating input', () => {
   const env = Object.freeze({ PATH: 'worker-path', ELECTRON_RUN_AS_NODE: '0' })
   assert.deepEqual(pluginCliEnv(env, 'win32', 'C:\\Users\\worker'), {

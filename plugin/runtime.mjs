@@ -31433,7 +31433,10 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
         if (!user || canPublish?.() === false) {
           return false;
         }
-        await user.setActivity(activity);
+        const { largeImageUrl, smallImageUrl, ...sdkActivity } = activity;
+        if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl;
+        if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl;
+        await user.setActivity(sdkActivity);
         return true;
       } catch {
         connected = false;
@@ -31606,9 +31609,9 @@ function findAgentModel(agentType, worktreePath, sources = defaultSources) {
 function claudeProjectSlug(path) {
   return path.replace(/[^A-Za-z0-9]/g, "-");
 }
-function lastModelIn(text) {
+function lastModelIn(text2) {
   let last = null;
-  for (const match of text.matchAll(MODEL_FIELD)) {
+  for (const match of text2.matchAll(MODEL_FIELD)) {
     const value = match[1] ?? "";
     if (!value.startsWith("<")) {
       last = value;
@@ -31752,7 +31755,7 @@ ${diagnostics.join("\n")}`;
     );
   });
 }
-async function readPresenceState(runWorktreePs = runOrcaWorktreePs) {
+async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoUrl) {
   const worktrees = parseWorktreePs(await runWorktreePs());
   const active = selectActiveWorktree(worktrees);
   if (!active) {
@@ -31767,8 +31770,48 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs) {
     model: findAgentModel(agentType, typeof active.path === "string" ? active.path : null),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
-    branchName: branchNameFor(active)
+    branchName: branchNameFor(active),
+    ...resolveRepoUrl ? { repoUrl: typeof active.path === "string" && active.path.length > 0 ? await resolveRepoUrl(active.path) : null } : {}
   };
+}
+
+// src/git-remote.ts
+import { execFile as execFile2 } from "node:child_process";
+function normalizeRepoUrl(raw) {
+  const remote = raw?.trim();
+  if (!remote || /[\s\\\x00-\x1f\x7f]/.test(remote) || /^[a-z]:/i.test(remote)) return null;
+  let source = remote;
+  if (!/^(https?|ssh):\/\//i.test(source)) {
+    const scp = /^git@([^/:]+):(.+)$/.exec(source);
+    if (!scp) return null;
+    source = `https://${scp[1]}/${scp[2]}`;
+  }
+  try {
+    const url = new URL(source);
+    if (!["https:", "http:", "ssh:"].includes(url.protocol) || !url.hostname) return null;
+    const path = url.pathname.replace(/\/+$/, "").replace(/\.git$/i, "");
+    if (!path || path === "/" || path.includes("//") || /[\\\x00-\x1f\x7f]/.test(decodeURIComponent(path))) return null;
+    const protocol = url.protocol === "ssh:" ? "https:" : url.protocol;
+    return new URL(`${protocol}//${url.hostname}${path}`).href;
+  } catch {
+    return null;
+  }
+}
+function readRepoUrl(directory, signal) {
+  return new Promise((resolve, reject) => {
+    execFile2(
+      "git",
+      ["-C", directory, "config", "--local", "--get", "remote.origin.url"],
+      { windowsHide: true, timeout: 1500, signal },
+      (error, stdout) => {
+        if (error) reject(error);
+        else resolve(normalizeRepoUrl(stdout));
+      }
+    );
+  }).catch((error) => {
+    if (error?.name === "AbortError") throw error;
+    return null;
+  });
 }
 
 // src/agent-art.ts
@@ -31945,19 +31988,21 @@ function createPresenceController(deps) {
         model: state.model ?? null,
         count: state.runningAgentCount,
         active: state.agentActive,
-        branch: state.branchName
+        branch: state.branchName,
+        repo: state.repoUrl ?? null
       });
       if (key === lastKey) {
         return;
       }
       const startedAt = sessionStartedAt ?? now();
-      const activity = buildActivity({
+      const activity = (deps.buildActivity ?? buildActivity)({
         projectName: state.projectName,
         agentType: state.agentType,
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
         agentActive: state.agentActive,
         branchName: state.branchName,
+        repoUrl: state.repoUrl ?? null,
         startedAt,
         ...deps.useUploadedArt !== void 0 ? { useUploadedArt: deps.useUploadedArt } : {}
       });
@@ -32006,9 +32051,9 @@ function parsePgrep(output) {
   return /^\s*\d+\s*$/m.test(output);
 }
 async function defaultExec(command, args) {
-  const { execFile: execFile2 } = await import("node:child_process");
+  const { execFile: execFile3 } = await import("node:child_process");
   return new Promise((resolve) => {
-    execFile2(
+    execFile3(
       command,
       [...args],
       { timeout: 5e3, windowsHide: true, maxBuffer: 1024 * 1024 },
@@ -32106,7 +32151,8 @@ function createPresenceRuntime(options) {
       },
       clear: () => deps.clear(),
       connectionEpoch: deps.connectionGeneration,
-      useUploadedArt: options.useUploadedArt
+      useUploadedArt: options.useUploadedArt,
+      buildActivity: options.buildActivity
     });
   };
   return {
@@ -32148,6 +32194,54 @@ function createPresenceRuntime(options) {
   };
 }
 
+// src/tray-presence.ts
+function truncate(value, limit) {
+  return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, "");
+}
+function text(value, limit = 128) {
+  const normalized = truncate(value?.replace(/\s+/g, " ").trim() ?? "", limit);
+  return normalized.length >= 2 ? normalized : "";
+}
+function buildTrayActivity(input) {
+  const uploaded = input.useUploadedArt === true;
+  const folder = text(input.incognito ? "Private Project" : input.projectName);
+  const project = folder ? truncate(/^folder:/i.test(folder) ? folder : `Folder: ${folder}`, 100) : "";
+  const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0;
+  const status = input.agentActive === false ? "Idle" : "Working";
+  const activity = {
+    details: "Using Orca",
+    state: project || "Orca",
+    startTimestamp: input.startedAt,
+    largeImageText: "Orca",
+    ...uploaded ? { largeImageKey: PRESENCE_ASSET_KEY } : {}
+  };
+  if (input.agentType !== null) {
+    const agent = text(agentDisplayName(input.agentType));
+    const suffix = `${count > 1 ? ` +${count - 1}` : ""} \xB7 ${status}`;
+    activity.details = agent ? `Agent: ${truncate(agent, 128 - 7 - suffix.length)}${suffix}` : "";
+    activity.state = project || status;
+    if (input.incognito) {
+      const key = uploaded ? agentArtKey(input.agentType) : null;
+      const url = key ? null : agentFaviconUrl(input.agentType);
+      if (key || url) {
+        if (key) activity.smallImageKey = key;
+        else if (url) activity.smallImageUrl = url;
+        activity.smallImageText = text(input.model) || text(`Agent: ${agent}`);
+      }
+    }
+  } else if (count > 1) {
+    activity.state = project ? text(`${project} \xB7 ${count} agents`) : `${count} agents`;
+  }
+  if (!input.incognito) {
+    activity.smallImageText = text(input.branchName) || "Branch";
+    if (uploaded) activity.smallImageKey = BRANCH_ART_KEY;
+    else activity.smallImageUrl = BRANCH_ICON_URL;
+    const repoUrl = normalizeRepoUrl(input.repoUrl);
+    if (repoUrl) activity.buttons = [{ label: "View Repository", url: repoUrl }];
+  }
+  return activity;
+}
+
 // src/plugin-session.ts
 function createPluginSession(options) {
   let enabled = options.enabled;
@@ -32181,13 +32275,14 @@ function createPluginSession(options) {
   const runtime = createPresenceRuntime({
     ...options.config,
     log: options.log,
+    buildActivity: (input) => buildTrayActivity({ ...input, incognito }),
     deps: {
       isOrcaRunning: async () => true,
       readState: async () => {
         try {
           const state = await options.readState();
           readError = null;
-          return state && incognito ? { ...state, projectName: "Private Project", branchName: null } : state;
+          return state && incognito ? { ...state, projectName: "Private Project", branchName: null, repoUrl: null } : state;
         } catch (error) {
           readError = error instanceof Error ? error.message : String(error);
           report(error);
@@ -32354,10 +32449,10 @@ function createPluginLifecycle(orca, legacy, startSession) {
         if (enabled != null && typeof enabled !== "boolean") throw new Error("Enabled setting must be boolean");
         const current = startSession(enabled !== false, incognito, readerAbort.signal, (status) => {
           if (stopping) return;
-          const text = status.paused ? "RPC paused" : status.discordConnected ? "RPC" : "RPC waiting";
+          const text2 = status.paused ? "RPC paused" : status.discordConnected ? "RPC" : "RPC waiting";
           void orca.host.call("statusBar.update", {
             id: "presence",
-            text,
+            text: text2,
             tooltip: status.lastError ?? "Discord Rich Presence: click to pause or resume"
           }).catch(report);
         });
@@ -32406,7 +32501,10 @@ async function activate(orca) {
     incognito,
     onStatus,
     log: (message) => orca.log(message),
-    readState: () => readPresenceState(() => runOrcaWorktreePs(process.execPath, cliEntry, signal)),
+    readState: () => readPresenceState(
+      () => runOrcaWorktreePs(process.execPath, cliEntry, signal),
+      (path) => readRepoUrl(path, signal)
+    ),
     transport: createDiscordPresence(config.clientId, (clientId) => new import_discord_rpc2.Client({
       clientId,
       transport: { type: "ipc", pathList: paths }

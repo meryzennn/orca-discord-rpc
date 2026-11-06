@@ -1,4 +1,4 @@
-import { buildActivity, type PresenceActivity } from './presence.ts'
+import { buildActivity, type PresenceActivity, type PresenceInput } from './presence.ts'
 
 export type PresenceState = {
   projectName: string | null
@@ -11,6 +11,7 @@ export type PresenceState = {
   agentActive: boolean
   /** Shown as the branch icon's tooltip. */
   branchName: string | null
+  repoUrl?: string | null
 }
 
 export type PresenceControllerDeps = {
@@ -22,6 +23,7 @@ export type PresenceControllerDeps = {
   connectionEpoch?: () => number
   /** Whether the bundled art is uploaded to the Discord application. */
   useUploadedArt?: boolean
+  buildActivity?: (input: PresenceInput) => PresenceActivity
   now?: () => Date
 }
 
@@ -82,20 +84,22 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         model: state.model ?? null,
         count: state.runningAgentCount,
         active: state.agentActive,
-        branch: state.branchName
+        branch: state.branchName,
+        repo: state.repoUrl ?? null
       })
       if (key === lastKey) {
         return
       }
 
       const startedAt = sessionStartedAt ?? now()
-      const activity = buildActivity({
+      const activity = (deps.buildActivity ?? buildActivity)({
         projectName: state.projectName,
         agentType: state.agentType,
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
         agentActive: state.agentActive,
         branchName: state.branchName,
+        repoUrl: state.repoUrl ?? null,
         startedAt,
         ...(deps.useUploadedArt !== undefined ? { useUploadedArt: deps.useUploadedArt } : {})
       })

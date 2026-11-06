@@ -5,6 +5,7 @@ import { loadConfig, type ConfigFile } from './config.ts'
 import { configPath } from './paths.ts'
 import { createDiscordPresence } from './discord.ts'
 import { readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
+import { readRepoUrl } from './git-remote.ts'
 import { createPluginSession, type PluginSession } from './plugin-session.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
 import { resolveBundledCliEntry, pluginDiscordPaths } from './plugin-platform.ts'
@@ -129,7 +130,9 @@ export default async function activate(orca: PluginApi): Promise<void> {
   const paths = pluginDiscordPaths(process.platform, tmpdir(), runtimeDirectory)
   const current = createPluginLifecycle(orca, legacy, (enabled, incognito, signal, onStatus) => createPluginSession({
     config, enabled, incognito, onStatus, log: message => orca.log(message),
-    readState: () => readPresenceState(() => runOrcaWorktreePs(process.execPath, cliEntry, signal)),
+    readState: () => readPresenceState(
+      () => runOrcaWorktreePs(process.execPath, cliEntry, signal), path => readRepoUrl(path, signal)
+    ),
     transport: createDiscordPresence(config.clientId, clientId => new Client({
       clientId, transport: { type: 'ipc', pathList: paths }
     }))

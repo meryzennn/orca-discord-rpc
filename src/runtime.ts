@@ -3,7 +3,7 @@ import { createPresenceController, type PresenceState } from './presence-control
 import { createOrcaGatedStateReader, type OrcaGatedReader } from './orca-gated-reader.ts'
 import { isOrcaRunning } from './orca-process.ts'
 import { readPresenceState } from './orca-reader.ts'
-import type { PresenceActivity } from './presence.ts'
+import type { PresenceActivity, PresenceInput } from './presence.ts'
 
 export type PresenceRuntimeStatus = {
   discordConnected: boolean
@@ -29,6 +29,7 @@ export type PresenceRuntimeOptions = {
   clientId: string
   pollMs: number
   useUploadedArt: boolean
+  buildActivity?: (input: PresenceInput) => PresenceActivity
   log?: (line: string) => void
   deps?: PresenceRuntimeDeps
 }
@@ -133,7 +134,8 @@ export function createPresenceRuntime(options: PresenceRuntimeOptions): Presence
       },
       clear: () => deps.clear(),
       connectionEpoch: deps.connectionGeneration,
-      useUploadedArt: options.useUploadedArt
+      useUploadedArt: options.useUploadedArt,
+      buildActivity: options.buildActivity
     })
   }
 
