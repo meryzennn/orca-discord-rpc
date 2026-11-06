@@ -65,17 +65,9 @@ Record results separately for Windows, macOS, and Linux. Automated checks do not
 
 When waiting persists, record the safe RPC operation/code from the plugin logs. Do not publish raw agent transcripts, credentials, or private repository paths in reports.
 
-## Standalone builds
+## Headless daemon
 
-Build and test the Windows tray app on Windows:
-
-```sh
-npm run build:csharp
-npm run pack:csharp
-dotnet test csharp/OrcaPresence.Tests
-```
-
-For the headless Node daemon:
+Run the standalone headless Node daemon:
 
 ```sh
 npm ci

@@ -4,7 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSy
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { claudeProjectSlug, findAgentModel, lastModelIn, prettyModelName } from './agent-model.ts'
-import { buildTrayActivity } from './tray-presence.ts'
+import { buildPluginActivity } from './plugin-presence.ts'
 
 describe('prettyModelName', () => {
   it('names the model the way people write it', () => {
@@ -131,7 +131,7 @@ describe('findAgentModel', () => {
     const sources = { env: noEnv, home }
     assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Sonnet 5.5')
     for (const incognito of [false, true]) {
-      const activity = buildTrayActivity({ projectName: 'app', agentType: 'omp', runningAgentCount: 1,
+      const activity = buildPluginActivity({ projectName: 'app', agentType: 'omp', runningAgentCount: 1,
         startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true,
         model: findAgentModel('omp', '/home/me/app', sources), incognito })
       assert.equal(activity.smallImageKey, 'omp')

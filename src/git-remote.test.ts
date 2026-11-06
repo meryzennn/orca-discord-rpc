@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeRepoUrl, readRepoUrl } from './git-remote.ts'
 import { readPresenceState } from './orca-reader.ts'
-import { buildTrayActivity } from './tray-presence.ts'
+import { buildPluginActivity } from './plugin-presence.ts'
 
 it('normalizes Git origins to web URLs and strips credentials, port and suffixes', () => {
   for (const [raw, expected] of [
@@ -73,7 +73,7 @@ it('preserves a normalized repository suffix through the reader and tray builder
     } }), readRepoUrl)
     assert.equal(state?.repoUrl, 'https://example.com/owner/repo.git')
     assert.ok(state)
-    const activity = buildTrayActivity({ ...state, startedAt: new Date('2026-11-06T00:00:00Z') })
+    const activity = buildPluginActivity({ ...state, startedAt: new Date('2026-11-06T00:00:00Z') })
     assert.deepEqual(activity.buttons, [{ label: 'View Repository', url: 'https://example.com/owner/repo.git' }])
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

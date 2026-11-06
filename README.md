@@ -131,19 +131,7 @@ A previous 30-second sample of the active SDK-based worker measured about 135 to
 
 To reduce polling frequency, increase `pollMs`, for example to `30000`. This reduces periodic CLI work, not the worker's steady runtime footprint. Pausing RPC leaves the worker loaded; disable the plugin when you want its worker to exit.
 
-## Standalone versions
-
-### Windows tray app
-
-1. Download `OrcaPresence-windows.zip` from the [v0.1.9 release](https://github.com/meryzennn/orca-discord-rpc/releases/tag/v0.1.9).
-2. Extract it and open `OrcaPresence.exe`.
-3. Right-click the tray icon to pause presence, change Incognito, or enable **Start with Windows**.
-
-Requires Windows 10 or 11 with .NET Framework 4.8. The tray app uses a branch icon in normal mode and an agent/model icon in Incognito. Its update menu checks for newer standalone releases.
-
-To uninstall, untick **Start with Windows**, quit the app, and delete its folder. Configuration and logs remain in `%LOCALAPPDATA%\orca-discord-rpc`.
-
-### Node headless daemon
+## Node headless daemon
 
 For scripted use, install Node.js 24 or newer and make Orca's CLI available on `PATH`:
 

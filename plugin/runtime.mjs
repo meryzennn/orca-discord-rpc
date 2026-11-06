@@ -1242,7 +1242,7 @@ function createPresenceRuntime(options) {
   };
 }
 
-// src/tray-presence.ts
+// src/plugin-presence.ts
 function truncate(value, limit) {
   return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, "");
 }
@@ -1250,7 +1250,7 @@ function text(value, limit = 128) {
   const normalized = truncate(value?.replace(/\s+/g, " ").trim() ?? "", limit);
   return normalized.length >= 2 ? normalized : "";
 }
-function buildTrayActivity(input) {
+function buildPluginActivity(input) {
   const uploaded = input.useUploadedArt === true;
   const folder = text(input.incognito ? "Private Project" : input.projectName);
   const project = folder ? truncate(/^folder:/i.test(folder) ? folder : `Folder: ${folder}`, 100) : "";
@@ -1327,7 +1327,7 @@ function createPluginSession(options) {
   const runtime = createPresenceRuntime({
     ...options.config,
     log: options.log,
-    buildActivity: (input) => buildTrayActivity({ ...input, incognito }),
+    buildActivity: (input) => buildPluginActivity({ ...input, incognito }),
     deps: {
       isOrcaRunning: async () => true,
       readState: async () => {
