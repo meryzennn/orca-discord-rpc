@@ -101,8 +101,8 @@ export function createPluginLifecycle(
             const value = await orca.settings.get(key)
             if (stopping) return
             if (typeof value !== 'boolean') throw new Error(`${key} setting must be boolean`)
-            if (key === 'enabled') await current.setEnabled(value)
-            else await current.setIncognito(value)
+            // Forward privacy intent before a resumed poll finishes; the session orders its own work.
+            void (key === 'enabled' ? current.setEnabled(value) : current.setIncognito(value)).catch(report)
           })
         }))
         refresh()

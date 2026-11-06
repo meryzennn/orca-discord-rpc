@@ -8,6 +8,7 @@ import { createPluginLifecycle, readLegacyConfig, type PluginApi, type LegacyCon
 import { createPluginSession } from './plugin-session.ts'
 import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
 import type { PresenceActivity } from './presence.ts'
+import type { PresenceState } from './presence-controller.ts'
 
 it('declares a resident worker with a real status command and both refresh events', () => {
   const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
@@ -44,7 +45,7 @@ function deferred<T>() {
 }
 
 function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | null = null,
-  readState?: (signal: AbortSignal) => Promise<null>) {
+  readState?: (signal: AbortSignal) => Promise<PresenceState | null>) {
   const settings = new Map(Object.entries(values))
   const commands = new Map<string, () => Promise<unknown>>()
   const events = new Map<string, () => void>()
@@ -209,6 +210,33 @@ it('orders setting reads and skips queued changes after deactivation', async () 
   await setImmediate()
   assert.deepEqual(h.reads, ['enabled'])
   assert.equal(h.stateReads(), 0)
+})
+
+it('forwards Incognito intent during a pending resume before publishing any public activity', async () => {
+  const started = deferred<void>()
+  const gate = deferred<void>()
+  const h = harness({ incognito: false, enabled: false }, null, async () => {
+    started.resolve()
+    await gate.promise
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
+  })
+  try {
+    await h.lifecycle.activate()
+    h.change('enabled', true)
+    await started.promise
+    h.change('incognito', true)
+    await setImmediate()
+    gate.resolve()
+    await setImmediate()
+    assert.equal(h.activities.length, 1)
+    assert.equal(h.activities[0]?.state, 'Private Project · Working')
+    assert.ok(!JSON.stringify(h.activities).includes('secret-project'))
+    assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
+    assert.deepEqual(h.order, ['clear', 'destroy', 'apply'])
+  } finally {
+    gate.resolve()
+    await h.lifecycle.deactivate()
+  }
 })
 
 it('logs an invalid live setting and continues processing the next valid change', async () => {
