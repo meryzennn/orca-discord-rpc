@@ -2,7 +2,7 @@
 
 Show your active [Orca](https://github.com/stablyai/orca) workspace and coding agent on your Discord profile.
 
-The plugin is written in TypeScript, bundled as JavaScript, and runs in Orca's built-in Node.js worker on Windows, macOS, and Linux. It starts with Orca, so plugin users do not need a separate tray app, Node.js installation, or terminal command.
+The plugin is written in TypeScript, bundled as JavaScript, and runs in Orca's built-in Node.js worker on Windows, macOS, and Linux. It starts with Orca, so plugin users do not need a separate external application, Node.js installation, or terminal command.
 
 ## Install
 
@@ -18,7 +18,7 @@ The worker requests `workspace:read`, `agent:read`, and `settings:own`. It reads
 
 Keep `#main` in the URL to track the latest plugin updates from the main branch.
 
-If you are switching from an older provider, stop it first. Disable any older development plugin, quit any legacy tray app, or stop the headless daemon. Keep one presence provider running at a time.
+If you are switching from an older provider, stop it first. Disable any older development plugin or stop any running headless daemon. Keep one presence provider running at a time.
 
 ## Use
 
@@ -108,7 +108,7 @@ Orca scrubs shell environment overrides from workers. Set plugin configuration i
 | Agent name instead of a model | Check that the agent has a saved session for this workspace. Other agent types use the name fallback. |
 | Missing icon | Discord may not render the public image. Use uploaded artwork with the matching asset keys. |
 | Missing repository button | The workspace needs a valid web-compatible Git `origin`. Incognito hides the button. |
-| Presence changes unexpectedly | Stop any older tray app, headless daemon, or duplicate development plugin. |
+| Presence changes unexpectedly | Stop any running headless daemon or duplicate development plugin. |
 
 OMP lookup uses the standard `~/.omp/agent/sessions` layout. Custom profiles, custom `--session-dir` paths, and XDG-relocated OMP state are not automatically discovered by the plugin.
 
