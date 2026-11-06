@@ -50,6 +50,22 @@ export function createPluginLifecycle(
     settingsWork = job.catch(report)
     return job
   }
+  const toggleSetting = (key: 'enabled' | 'incognito'): Promise<unknown> => queueSetting(async () => {
+    const value = await orca.settings.get(key)
+    if (stopping) return
+    if (typeof value !== 'boolean' && (key === 'incognito' || value != null)) {
+      throw new Error(`${key} setting must be boolean`)
+    }
+    return orca.settings.set(key, value === false)
+  })
+  const updateIncognito = (value: boolean): void => {
+    if (stopping) return
+    void orca.host.call('statusBar.update', {
+      id: 'incognito', text: value ? 'Incognito On' : 'Incognito Off',
+      tooltip: value ? 'Incognito on: project and repository hidden. Click to turn off.'
+        : 'Incognito off: click to hide project and repository.'
+    }).catch(report)
+  }
   const deactivate = (): Promise<void> => {
     if (shutdown) return shutdown
     stopping = true
@@ -89,13 +105,10 @@ export function createPluginLifecycle(
           }).catch(report)
         })
         session = current
+        updateIncognito(incognito)
         const refresh = (): void => { if (!stopping) void current.refresh().catch(report) }
-        subscriptions.push(orca.commands.register('presence.toggle', () => queueSetting(async () => {
-          const value = await orca.settings.get('enabled')
-          if (stopping) return
-          if (value != null && typeof value !== 'boolean') throw new Error('enabled setting must be boolean')
-          return orca.settings.set('enabled', value === false)
-        })))
+        subscriptions.push(orca.commands.register('presence.toggle', () => toggleSetting('enabled')))
+        subscriptions.push(orca.commands.register('presence.incognito.toggle', () => toggleSetting('incognito')))
         subscriptions.push(orca.events.on('workspace.changed', refresh))
         subscriptions.push(orca.events.on('agent.status.changed', refresh))
         subscriptions.push(orca.settings.onDidChange(({ key }) => {
@@ -106,6 +119,7 @@ export function createPluginLifecycle(
             if (typeof value !== 'boolean') throw new Error(`${key} setting must be boolean`)
             // Forward privacy intent before a resumed poll finishes; the session orders its own work.
             void (key === 'enabled' ? current.setEnabled(value) : current.setIncognito(value)).catch(report)
+            if (key === 'incognito') updateIncognito(value)
           })
         }))
         refresh()

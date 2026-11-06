@@ -12,10 +12,16 @@
   "pluginApi": 1,
   "main": "plugin/runtime.mjs",
   "contributes": {
-    "commands": [{ "id": "presence.toggle", "title": "Discord RPC: Pause or resume" }],
+    "commands": [
+      { "id": "presence.toggle", "title": "Discord RPC: Pause or resume" },
+      { "id": "presence.incognito.toggle", "title": "Discord RPC: Toggle Incognito" }
+    ],
     "statusBarItems": [{
       "id": "presence", "text": "RPC", "icon": "plug",
       "tooltip": "Discord Rich Presence", "command": "presence.toggle"
+    }, {
+      "id": "incognito", "text": "Incognito Off",
+      "tooltip": "Click to hide project and repository details", "command": "presence.incognito.toggle"
     }],
     "events": [{ "on": "workspace.changed" }, { "on": "agent.status.changed" }],
     "settings": [

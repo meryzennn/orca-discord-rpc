@@ -55,6 +55,7 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
   const writes: [string, boolean][] = []
   const logs: string[] = []
   const statuses: Record<string, string>[] = []
+  const privacyStatuses: Record<string, string>[] = []
   const activities: PresenceActivity[] = []
   const order: string[] = []
   let signal: AbortSignal | null = null
@@ -78,7 +79,12 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
     events: { on: (event, handler) => {
       events.set(event, handler); return { dispose: () => { events.delete(event) } }
     } },
-    host: { call: async (method, params) => { assert.equal(method, 'statusBar.update'); statuses.push(params) } }
+    host: { call: async (method, params) => {
+      assert.equal(method, 'statusBar.update')
+      assert.ok(params.id === 'presence' || params.id === 'incognito')
+      const updates = params.id === 'presence' ? statuses : privacyStatuses
+      updates.push(params)
+    } }
   }
   const lifecycle = createPluginLifecycle(orca, legacy, (enabled, incognito, abort, onStatus) => {
     publishStatus = onStatus
@@ -103,7 +109,7 @@ function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | nu
     })
   })
   return {
-    lifecycle, commands, events, changes, reads, writes, logs, statuses, activities, order,
+    lifecycle, commands, events, changes, reads, writes, logs, statuses, privacyStatuses, activities, order,
     stateReads: () => stateReads, signal: () => signal,
     setGet: (handler: typeof get) => { get = handler },
     publishStatus: (status: PresenceRuntimeStatus) => publishStatus?.(status),
@@ -277,4 +283,94 @@ it('shows safe failures while waiting and paused help after a previous failure',
     assert.equal(h.statuses.at(-1)?.text, 'RPC')
     assert.equal(h.statuses.at(-1)?.tooltip, 'Discord Rich Presence: click to pause or resume')
   } finally { await h.lifecycle.deactivate() }
+})
+
+it('declares a direct Incognito control next to RPC using a contributed command', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
+  const item = manifest.contributes.statusBarItems.find((entry: { id: string }) => entry.id === 'incognito')
+  assert.ok(item)
+  assert.equal(item.command, 'presence.incognito.toggle')
+  assert.ok(manifest.contributes.commands.some((entry: { id: string }) => entry.id === item.command))
+})
+
+it('toggles Incognito from the status bar and synchronizes external settings changes', async () => {
+  const h = harness({ incognito: false })
+  try {
+    await h.lifecycle.activate()
+    await setImmediate()
+    assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito Off')
+    const toggle = h.commands.get('presence.incognito.toggle')
+    assert.ok(toggle)
+    await toggle()
+    await setImmediate()
+    assert.deepEqual(h.writes.at(-1), ['incognito', true])
+    assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
+    assert.equal(h.activities.at(-1)?.state, 'Folder: Private Project')
+    h.change('incognito', false)
+    await setImmediate()
+    assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito Off')
+    assert.equal(h.activities.at(-1)?.state, 'Folder: secret-project')
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('keeps RPC paused when the status-bar Incognito control changes privacy', async () => {
+  const h = harness({ incognito: false, enabled: false })
+  try {
+    await h.lifecycle.activate()
+    await setImmediate()
+    const toggle = h.commands.get('presence.incognito.toggle')
+    assert.ok(toggle)
+    await toggle()
+    await setImmediate()
+    assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
+    assert.equal(h.statuses.at(-1)?.text, 'RPC paused')
+    assert.equal(h.activities.length, 0)
+    assert.ok(h.writes.every(([key]) => key === 'incognito'))
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('rejects invalid Incognito values and skips a pending status-bar toggle on shutdown', async () => {
+  const h = harness({ incognito: false })
+  await h.lifecycle.activate()
+  await setImmediate()
+  const toggle = h.commands.get('presence.incognito.toggle')
+  assert.ok(toggle)
+  h.change('incognito', 'true')
+  await setImmediate()
+  await assert.rejects(toggle(), /incognito setting must be boolean/)
+  assert.deepEqual(h.writes, [])
+  const gate = deferred<unknown>()
+  h.setGet(() => gate.promise)
+  const pending = toggle()
+  await setImmediate()
+  const count = h.privacyStatuses.length
+  await h.lifecycle.deactivate()
+  gate.resolve(true)
+  await pending
+  assert.deepEqual(h.writes, [])
+  assert.equal(h.privacyStatuses.length, count)
+  assert.equal(h.commands.size, 0)
+})
+
+it('applies status-bar privacy intent before a pending resume can publish a public activity', async () => {
+  const started = deferred<void>()
+  const gate = deferred<void>()
+  const h = harness({ incognito: false, enabled: false }, null, async () => {
+    started.resolve()
+    await gate.promise
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1 }
+  })
+  try {
+    await h.lifecycle.activate()
+    h.change('enabled', true)
+    await started.promise
+    await h.commands.get('presence.incognito.toggle')!()
+    await setImmediate()
+    gate.resolve()
+    await setImmediate()
+    assert.equal(h.activities.length, 1)
+    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
+    assert.ok(!JSON.stringify(h.activities).includes('secret-'))
+    assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
+  } finally { gate.resolve(); await h.lifecycle.deactivate() }
 })
