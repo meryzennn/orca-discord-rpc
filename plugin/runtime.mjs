@@ -31444,6 +31444,11 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
     const next = createClient(clientId);
     client = next;
     visible = false;
+    const rest = Object.getOwnPropertyDescriptor(next, "rest")?.value;
+    if (rest !== null && typeof rest === "object") {
+      if ("clearHashSweeper" in rest && typeof rest.clearHashSweeper === "function") rest.clearHashSweeper();
+      if ("clearHandlerSweeper" in rest && typeof rest.clearHandlerSweeper === "function") rest.clearHandlerSweeper();
+    }
     next.on("disconnected", () => {
       if (client !== next) return;
       connected = false;

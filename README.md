@@ -119,6 +119,14 @@ These measurements cover the permanent plugin worker. They exclude Orca, Discord
 
 Working set includes shared runtime pages. Private bytes measure memory committed to the process. The older Windows tray app periodically trims its working set, so its low Task Manager reading is a different comparison. This plugin still runs in Orca's Node worker.
 
+A later Windows counter sample reported 32.6 MiB of private working set for the live worker. This measures resident pages exclusive to that process, excluding shared pages. It is a different metric from both total working set and committed private bytes; the 137 MiB figure should not be read as entirely additional, unique RAM.
+
+A separate isolated benchmark on the same machine measured an initialized empty Orca worker at 121.4 MiB working set and 27.1 MiB private bytes. Importing the RPC bundle with presence paused measured 133.2 MiB and 37.9 MiB. These samples did not connect to Discord or poll workspaces, so they show host and module overhead, not a before/after optimization result.
+
+The RPC adapter stops unused SDK REST sweepers when creating a connection. This allows old REST instances to be collected after reconnects or failed logins. It prevents accumulation; it does not remove Orca's Node runtime or promise a 10 MiB plugin.
+
+To reduce polling frequency, increase `pollMs`, for example to `30000`. This reduces periodic CLI work, not the worker's steady runtime footprint. Pausing RPC leaves the worker loaded; disable the plugin when you want its worker to exit.
+
 ## Standalone versions
 
 ### Windows tray app
