@@ -65,7 +65,9 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
         }
       },
       // The queued privacy change must close the old socket before any new push.
-      apply: activity => privacyPending ? Promise.resolve(false) : options.transport.apply(activity),
+      apply: activity => closed || privacyPending
+        ? Promise.resolve(false)
+        : options.transport.apply(activity, () => !closed && !privacyPending),
       clear: options.transport.clear,
       connectionGeneration: options.transport.connectionGeneration,
       schedule: (_tick, ms) => interval(() => { void refresh().catch(report) }, ms)

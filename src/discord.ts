@@ -2,7 +2,7 @@ import { Client } from '@xhayper/discord-rpc'
 import type { PresenceActivity } from './presence.ts'
 
 export type DiscordPresence = {
-  apply: (activity: PresenceActivity) => Promise<boolean>
+  apply: (activity: PresenceActivity, canPublish?: () => boolean) => Promise<boolean>
   clear: () => Promise<boolean>
   destroy: () => Promise<void>
   /** Increments whenever the socket drops; a caller compares it to know a re-push is due. */
@@ -58,11 +58,12 @@ export function createDiscordPresence(
   }
 
   return {
-    async apply(activity: PresenceActivity): Promise<boolean> {
+    async apply(activity: PresenceActivity, canPublish?: () => boolean): Promise<boolean> {
       try {
         const active = await ensureClient()
         const user = active.user
-        if (!user) {
+        // Privacy or shutdown intent can change while login is pending.
+        if (!user || canPublish?.() === false) {
           return false
         }
         await user.setActivity(activity)

@@ -5,6 +5,7 @@ import type { PresenceState } from './presence-controller.ts'
 import type { PresenceActivity } from './presence.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
 import { createPluginSession } from './plugin-session.ts'
+import { createDiscordPresence } from './discord.ts'
 
 const state: PresenceState = {
   projectName: 'secret-project', agentType: 'omp', runningAgentCount: 1,
@@ -51,7 +52,10 @@ function harness(options: {
       }
     },
     transport: {
-      apply: async activity => { order.push('apply'); pushed.push(activity); connected = true; return true },
+      apply: async (activity, canPublish) => {
+        if (canPublish && !canPublish()) return false
+        order.push('apply'); pushed.push(activity); connected = true; return true
+      },
       clear: async () => {
         order.push('clear')
         if (options.failClear) throw new Error('clear failed')
@@ -181,7 +185,7 @@ it('drains an outstanding read before idempotent shutdown', async () => {
   gate.resolve()
   await Promise.all([first, stopped])
   assert.equal(h.reads(), 1)
-  assert.deepEqual(h.order, ['apply', 'clear', 'destroy'])
+  assert.deepEqual(h.order, ['clear', 'destroy'])
   assert.equal(h.cancelled(), 1)
   const statusCount = h.statuses.length
   await h.session.refresh()
@@ -192,6 +196,58 @@ it('drains an outstanding read before idempotent shutdown', async () => {
   assert.equal(h.reads(), 1)
   assert.equal(h.statuses.length, statusCount)
   assert.equal(h.order.filter(value => value === 'destroy').length, 1)
+})
+
+function loginHarness() {
+  const entered = deferred()
+  const gate = deferred()
+  const order: string[] = []
+  const sent: PresenceActivity[] = []
+  const transport = createDiscordPresence(DEFAULT_CLIENT_ID, () => ({
+    on: () => {},
+    login: async () => { order.push('login'); entered.resolve(); await gate.promise },
+    destroy: async () => { order.push('destroy') },
+    user: {
+      setActivity: activity => {
+        order.push(`send:${activity.state}`)
+        sent.push(activity)
+        return Promise.resolve({})
+      },
+      clearActivity: async () => { order.push('clear') }
+    }
+  }))
+  const session = createPluginSession({
+    config: { clientId: DEFAULT_CLIENT_ID, pollMs: DEFAULT_POLL_MS, useUploadedArt: false },
+    enabled: true, incognito: false, readState: async () => state,
+    transport, onStatus: () => {}, log: () => {}, scheduleInterval: () => () => {}
+  })
+  return { session, entered, gate, order, sent }
+}
+
+it('prevents a public request after Incognito intent during real transport login', async () => {
+  const h = loginHarness()
+  const pending = h.session.refresh()
+  await h.entered.promise
+  const privateMode = h.session.setIncognito(true)
+  h.gate.resolve()
+  await Promise.all([pending, privateMode])
+  assert.deepEqual(h.order, ['login', 'clear', 'destroy', 'login', 'send:Private Project · Working'])
+  assert.equal(h.sent.length, 1)
+  assert.ok(!JSON.stringify(h.sent).includes('secret-project'))
+  assert.ok(!JSON.stringify(h.sent).includes('secret-branch'))
+  await h.session.stop()
+})
+
+it('drains real transport login without publishing after shutdown intent', async () => {
+  const h = loginHarness()
+  const pending = h.session.refresh()
+  await h.entered.promise
+  const stopped = h.session.stop()
+  assert.deepEqual(h.order, ['login'])
+  h.gate.resolve()
+  await Promise.all([pending, stopped])
+  assert.deepEqual(h.order, ['login', 'clear', 'destroy'])
+  assert.deepEqual(h.sent, [])
 })
 
 it('clears and destroys even if cancelling the interval throws on shutdown', async () => {

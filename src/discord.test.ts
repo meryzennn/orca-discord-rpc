@@ -10,8 +10,9 @@ const activity: PresenceActivity = {
 }
 
 /** A stand-in for the RPC client, so no Discord is needed and failures can be forced. */
-function fakeClient(options: { failLogin?: boolean; failSet?: boolean } = {}) {
+function fakeClient(options: { failLogin?: boolean; failSet?: boolean; login?: () => Promise<void> } = {}) {
   let destroyed = 0
+  const sent: PresenceActivity[] = []
   const client = {
     // Why present: the transport subscribes to 'disconnected' to learn about a Discord restart.
     on: (): void => {},
@@ -19,15 +20,17 @@ function fakeClient(options: { failLogin?: boolean; failSet?: boolean } = {}) {
       if (options.failLogin) {
         throw new Error('EPIPE')
       }
+      await options.login?.()
     },
     destroy: async (): Promise<void> => {
       destroyed += 1
     },
     user: {
-      setActivity: async (): Promise<unknown> => {
+      setActivity: async (activity: PresenceActivity): Promise<unknown> => {
         if (options.failSet) {
           throw new Error('EPIPE')
         }
+        sent.push(activity)
         return {}
       },
       clearActivity: async (): Promise<void> => {}
@@ -35,6 +38,7 @@ function fakeClient(options: { failLogin?: boolean; failSet?: boolean } = {}) {
   }
   return {
     client,
+    sent,
     destroyed: () => destroyed
   }
 }
@@ -81,4 +85,24 @@ describe('createDiscordPresence isConnected', () => {
     assert.equal(await presence.apply(activity), false)
     assert.equal(presence.isConnected(), false)
   })
+})
+
+it('checks publication intent after deferred login and permits a later retry', async () => {
+  let enter!: () => void
+  let release!: () => void
+  const entered = new Promise<void>(resolve => { enter = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const fake = fakeClient({ login: async () => { enter(); await gate } })
+  const presence = createDiscordPresence('1556649058657902712', () => fake.client)
+  let allowed = true
+  const pending = presence.apply(activity, () => allowed)
+  await entered
+  allowed = false
+  release()
+  assert.equal(await pending, false)
+  assert.deepEqual(fake.sent, [])
+  allowed = true
+  assert.equal(await presence.apply(activity, () => allowed), true)
+  assert.deepEqual(fake.sent, [activity])
+  await presence.destroy()
 })
