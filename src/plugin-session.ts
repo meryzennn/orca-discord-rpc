@@ -2,7 +2,7 @@ import type { AppConfig } from './config.ts'
 import type { DiscordPresence } from './discord.ts'
 import type { PresenceState } from './presence-controller.ts'
 import { createPresenceRuntime, type PresenceRuntimeStatus } from './runtime.ts'
-import { buildTrayActivity } from './tray-presence.ts'
+import { buildPluginActivity } from './plugin-presence.ts'
 
 export type PluginSession = {
   refresh(): Promise<void>
@@ -60,7 +60,7 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
   const runtime = createPresenceRuntime({
     ...options.config,
     log: options.log,
-    buildActivity: input => buildTrayActivity({ ...input, incognito }),
+    buildActivity: input => buildPluginActivity({ ...input, incognito }),
     deps: {
       isOrcaRunning: async () => true,
       readState: async () => {

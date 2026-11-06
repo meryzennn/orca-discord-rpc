@@ -20,9 +20,7 @@
     "status": "node src/cli.ts status",
     "test": "node --test \"src/*.test.ts\" \"config/scripts/*.test.mjs\"",
     "typecheck": "tsc --noEmit",
-    "build:plugin": "node config/scripts/build-plugin.mjs",
-    "build:csharp": "dotnet publish csharp/OrcaPresence -c Release -o dist-csharp",
-    "pack:csharp": "node config/scripts/pack-zip.mjs"
+    "build:plugin": "node config/scripts/build-plugin.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

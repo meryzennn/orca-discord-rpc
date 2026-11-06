@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPresenceController, type PresenceState } from './presence-controller.ts'
-import { buildTrayActivity } from './tray-presence.ts'
+import { buildPluginActivity } from './plugin-presence.ts'
 import type { PresenceActivity } from './presence.ts'
 
 const T0 = new Date('2026-10-05T00:00:00.000Z')
@@ -55,7 +55,7 @@ it('uses the injected tray builder and republishes origin edits without resettin
   let state = { ...RUNNING, repoUrl: 'https://github.com/owner/first' }
   let now = T0
   const controller = createPresenceController({
-    readState: async () => state, buildActivity: buildTrayActivity,
+    readState: async () => state, buildActivity: buildPluginActivity,
     apply: async activity => { applied.push(activity); return true },
     clear: async () => true, now: () => now
   })

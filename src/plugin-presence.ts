@@ -11,7 +11,7 @@ function text(value: string | null | undefined, limit = 128): string {
   return normalized.length >= 2 ? normalized : ''
 }
 
-export function buildTrayActivity(input: PresenceInput & { incognito?: boolean }): PresenceActivity {
+export function buildPluginActivity(input: PresenceInput & { incognito?: boolean }): PresenceActivity {
   const uploaded = input.useUploadedArt === true
   const folder = text(input.incognito ? 'Private Project' : input.projectName)
   const project = folder ? truncate(/^folder:/i.test(folder) ? folder : `Folder: ${folder}`, 100) : ''
@@ -42,3 +42,6 @@ export function buildTrayActivity(input: PresenceInput & { incognito?: boolean }
   }
   return activity
 }
+
+export const buildTrayActivity = buildPluginActivity
+
