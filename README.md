@@ -1,8 +1,20 @@
 # Orca Discord Presence
 
+![Illustration of the Orca Discord Presence plugin sending a card to Discord, with the RPC and Incognito controls in Orca's status bar](docs/images/hero.jpg)
+
 Shows your active [Orca](https://github.com/stablyai/orca) workspace and coding agent on your Discord profile.
 
 The plugin is TypeScript bundled to JavaScript. It runs in Orca's built-in Node.js worker on Windows, macOS, and Linux and starts with Orca. You need no separate app, no Node.js install, and no terminal command.
+
+## Preview
+
+These are illustrations of the plugin, not captures from a live session. Real cards vary with your Discord version and theme.
+
+![Illustration of the Discord card for an Oh My Pi agent in the orca-discord-rpc folder, with a View Repository button](docs/images/orca-card.jpg)
+
+![Illustration of the six features: live presence, model on hover, Incognito, repository button, runs inside Orca, and a small bundle](docs/images/features.jpg)
+
+![Illustration of a whale tail above an Oh My Pi, Idle presence chip](docs/images/whale-tail.jpg)
 
 ## Install
 

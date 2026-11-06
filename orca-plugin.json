@@ -11,6 +11,12 @@
   "engines": { "orca": ">=1.4.250" },
   "pluginApi": 1,
   "main": "plugin/runtime.mjs",
+  "screenshots": [
+    { "path": "docs/images/hero.jpg", "alt": "Illustration: the Orca Discord Presence plugin sending a card to Discord, with the RPC and Incognito controls in Orca's status bar.", "caption": "Illustration of the plugin and its status bar controls." },
+    { "path": "docs/images/whale-tail.jpg", "alt": "Illustration: a whale tail rising from dark water above a presence chip that reads Oh My Pi, Idle.", "caption": "Illustration of the presence status." },
+    { "path": "docs/images/features.jpg", "alt": "Illustration: six feature tiles next to a Discord Playing card for the orca-discord-rpc workspace.", "caption": "Illustration of the main features." },
+    { "path": "docs/images/orca-card.jpg", "alt": "Illustration: a Discord Playing card showing Orca, Oh My Pi, Idle, the folder orca-discord-rpc, and a View Repository button.", "caption": "Illustration of the Discord card." }
+  ],
   "contributes": {
     "commands": [
       { "id": "presence.toggle", "title": "Discord RPC: Pause or resume" },

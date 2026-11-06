@@ -21,6 +21,15 @@ Everything Discord shows is composed in `src/presence-format.ts` from the words 
 
 Model lookup is one small module per agent in `src/model-resolvers/`, selected by the registry's `modelResolver` id. To support a new session layout, add a resolver module, register it in `src/model-resolvers/index.ts`, and reference it from `config/agents.json`.
 
+## Plugin page images
+
+Orca has no upload step for plugin images. The files live in the repository and the manifest points at them by relative path, so they are read from the commit a user installs. Put them in `docs/images/`; the README links the same files.
+
+- `screenshots` in `orca-plugin.json`: at most 6, shown in the order listed, so the first is the lead image. Each needs a `path` and an `alt` (at most 160 characters); `caption` (at most 120) and `theme` (`light` or `dark`) are optional. PNG, JPEG or WEBP, static, between 1280x800 and 2560x1600 (16:10 recommended), at most 1536 KB each and 8 MB together.
+- `icon`: a separate field. Square PNG or WEBP, at least 128x128, at most 256 KB. A JPEG or a wide image cannot be the icon.
+
+An image outside these limits makes the manifest invalid and the plugin cannot be installed, so `src/manifest-assets.test.ts` checks them. Only a commit that contains the images shows them: a tag created earlier keeps the manifest it was created with.
+
 ## Validate a clean snapshot
 
 Orca's folder inspection includes ignored files. A checkout containing `node_modules` or local outputs can exceed its 50 MiB folder limit. Use a separate snapshot of committed files:
