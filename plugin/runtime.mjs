@@ -31406,64 +31406,121 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
   let client = null;
   let connected = false;
   let generation = 0;
+  let lifecycle2 = 0;
+  let lastFailure = null;
+  const failure = (operation, error) => {
+    const value = error !== null && typeof error === "object" && "code" in error ? error.code : null;
+    const code = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : "unknown";
+    lastFailure = `Discord RPC ${operation} failed (code: ${code})`;
+  };
+  const retire = async (current) => {
+    if (client !== current) return;
+    client = null;
+    connected = false;
+    try {
+      await current.destroy();
+    } catch (error) {
+      if (client === null) {
+        client = current;
+        failure("destroy", error);
+      }
+      throw error;
+    }
+  };
   const ensureClient = async () => {
-    if (client && connected) {
-      return client;
-    }
+    if (client && connected) return client;
+    const epoch = lifecycle2;
     if (client) {
-      await client.destroy().catch(() => {
-      });
-      client = null;
+      try {
+        await retire(client);
+      } catch {
+        generation += 1;
+        return null;
+      }
     }
+    if (epoch !== lifecycle2) return null;
     const next = createClient(clientId);
+    client = next;
     next.on("disconnected", () => {
+      if (client !== next) return;
       connected = false;
+      lifecycle2 += 1;
       generation += 1;
     });
-    await next.login();
-    client = next;
+    try {
+      await next.login();
+    } catch (error) {
+      if (client === next) {
+        connected = false;
+        generation += 1;
+        failure("login", error);
+        await retire(next).catch(() => {
+        });
+      }
+      return null;
+    }
+    if (client !== next || epoch !== lifecycle2) {
+      if (client === next) await retire(next).catch(() => {
+      });
+      return null;
+    }
     connected = true;
     return next;
   };
   return {
     async apply(activity, canPublish) {
+      let active = null;
       try {
-        const active = await ensureClient();
-        const user = active.user;
-        if (!user || canPublish?.() === false) {
+        active = await ensureClient();
+        const user = active?.user;
+        if (!active || client !== active || !connected || !user || canPublish?.() === false) {
           return false;
         }
         const { largeImageUrl, smallImageUrl, ...sdkActivity } = activity;
         if (!sdkActivity.largeImageKey && largeImageUrl) sdkActivity.largeImageKey = largeImageUrl;
         if (!sdkActivity.smallImageKey && smallImageUrl) sdkActivity.smallImageKey = smallImageUrl;
         await user.setActivity(sdkActivity);
+        if (client !== active || !connected) return false;
+        lastFailure = null;
         return true;
-      } catch {
-        connected = false;
-        generation += 1;
+      } catch (error) {
+        if (active === null || client === active) {
+          connected = false;
+          generation += 1;
+          failure(active === null ? "login" : "apply", error);
+        }
         return false;
       }
     },
     async clear() {
+      const current = client;
       try {
-        await client?.user?.clearActivity();
-        connected = false;
+        await current?.user?.clearActivity();
+        if (client === current) {
+          connected = false;
+          lastFailure = null;
+        }
         return true;
-      } catch {
-        connected = false;
-        generation += 1;
+      } catch (error) {
+        if (client === current) {
+          connected = false;
+          generation += 1;
+          failure("clear", error);
+        }
         return false;
       }
     },
     async destroy() {
-      const current = client;
-      client = null;
+      lifecycle2 += 1;
+      const epoch = lifecycle2;
       connected = false;
-      await current?.destroy().catch(() => {
-      });
+      const current = client;
+      if (current) await retire(current);
+      if (epoch === lifecycle2 && client === null) lastFailure = null;
     },
     connectionGeneration: () => generation,
-    isConnected: () => connected
+    isConnected: () => connected,
+    lastError: () => lastFailure
   };
 }
 
@@ -32231,22 +32288,17 @@ function buildTrayActivity(input) {
     const suffix = `${count > 1 ? ` +${count - 1}` : ""} \xB7 ${status}`;
     activity.details = agent ? `Agent: ${truncate(agent, 128 - 7 - suffix.length)}${suffix}` : "";
     activity.state = project || status;
-    if (input.incognito) {
-      const key = uploaded ? agentArtKey(input.agentType) : null;
-      const url = key ? null : agentFaviconUrl(input.agentType);
-      if (key || url) {
-        if (key) activity.smallImageKey = key;
-        else if (url) activity.smallImageUrl = url;
-        activity.smallImageText = text(input.model) || text(`Agent: ${agent}`);
-      }
+    const key = uploaded ? agentArtKey(input.agentType) : null;
+    const url = key ? null : agentFaviconUrl(input.agentType);
+    if (key || url) {
+      if (key) activity.smallImageKey = key;
+      else if (url) activity.smallImageUrl = url;
+      activity.smallImageText = text(input.model) || text(`Agent: ${agent}`);
     }
   } else if (count > 1) {
     activity.state = project ? text(`${project} \xB7 ${count} agents`) : `${count} agents`;
   }
   if (!input.incognito) {
-    activity.smallImageText = text(input.branchName) || "Branch";
-    if (uploaded) activity.smallImageKey = BRANCH_ART_KEY;
-    else activity.smallImageUrl = BRANCH_ICON_URL;
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl);
     if (repoUrl) activity.buttons = [{ label: "View Repository", url: repoUrl }];
   }
@@ -32264,6 +32316,15 @@ function createPluginSession(options) {
   let refreshJob = null;
   let shutdown = null;
   const report = (error) => options.log(error instanceof Error ? error.message : String(error));
+  const destroyTransport = async () => {
+    try {
+      await options.transport.destroy();
+    } catch {
+      const message = options.transport.lastError?.() ?? "Discord RPC destroy failed (code: unknown)";
+      if (!closed) publish({ ...runtime.getStatus(), lastError: message });
+      throw new Error(message);
+    }
+  };
   const serial = (operation) => {
     const job = tail.then(operation);
     tail = job.catch(report);
@@ -32301,8 +32362,19 @@ function createPluginSession(options) {
         }
       },
       // The queued privacy change must close the old socket before any new push.
-      apply: (activity) => closed || privacyPending ? Promise.resolve(false) : options.transport.apply(activity, () => !closed && !privacyPending),
-      clear: options.transport.clear,
+      apply: async (activity) => {
+        if (closed || privacyPending) return false;
+        const ok = await options.transport.apply(activity, () => !closed && !privacyPending);
+        const error = options.transport.lastError?.();
+        if (!ok && error) options.log(error);
+        return ok;
+      },
+      clear: async () => {
+        const ok = await options.transport.clear();
+        const error = options.transport.lastError?.();
+        if (!ok && error) options.log(error);
+        return ok;
+      },
       connectionGeneration: options.transport.connectionGeneration,
       schedule: (_tick, ms) => interval(() => {
         void refresh().catch(report);
@@ -32313,7 +32385,7 @@ function createPluginSession(options) {
     ...status,
     paused: !enabled,
     discordConnected: options.transport.isConnected(),
-    lastError: readError ?? status.lastError
+    lastError: readError ?? options.transport.lastError?.() ?? status.lastError
   });
   const unsubscribe = runtime.subscribe(publish);
   publish(runtime.getStatus());
@@ -32332,7 +32404,7 @@ function createPluginSession(options) {
       return serial(async () => {
         if (!closed) {
           if (enabled) await runtime.pause().catch(report);
-          await options.transport.destroy();
+          await destroyTransport();
         }
         privacyPending = false;
         if (!closed && enabled) await runtime.start();
@@ -32349,7 +32421,7 @@ function createPluginSession(options) {
           try {
             await options.transport.clear();
           } finally {
-            await options.transport.destroy();
+            await destroyTransport();
           }
         }
       });
@@ -32461,10 +32533,11 @@ function createPluginLifecycle(orca, legacy, startSession) {
         const current = startSession(enabled !== false, incognito, readerAbort.signal, (status) => {
           if (stopping) return;
           const text2 = status.paused ? "RPC paused" : status.discordConnected ? "RPC" : "RPC waiting";
+          const tooltip = status.paused ? "Discord Rich Presence paused: click to resume" : status.lastError ?? "Discord Rich Presence: click to pause or resume";
           void orca.host.call("statusBar.update", {
             id: "presence",
             text: text2,
-            tooltip: status.lastError ?? "Discord Rich Presence: click to pause or resume"
+            tooltip
           }).catch(report);
         });
         session = current;

@@ -51,7 +51,9 @@ Before migrating, stop the old presence provider yourself. On Windows, untick St
 
 On first startup, the plugin copies Incognito from the existing `config.json` only when no plugin value is saved. Later changes stay in Orca's plugin settings. Incognito shows `Folder: Private Project`, hides the actual branch and repository button, and uses the small agent/model icon; the old activity is cleared before the privacy update is published. The public Discord application id, poll interval and uploaded-art flag still come from that file or built-in defaults. See [Configuration](#configuration) for file locations and worker environment limits.
 
-The plugin uses the same presence labels and normal/Incognito icon slots as the Windows tray app. In normal mode it reads the active workspace's local Git `origin` for a View Repository button, removing credentials, ports, query strings and fragments before publishing the web URL. Missing Git or an unavailable origin leaves the button hidden. Plugin memory use has not been measured.
+The plugin shows the featured agent in the small icon in both modes. Hovering shows its model when known, otherwise its agent name. Normal mode keeps the folder and validated View Repository button; Incognito shows Private Project and hides repository information. Changing privacy clears the previous activity and closes its connection before republishing. Missing Git or an unavailable origin leaves the button hidden. Plugin memory use has not been measured.
+
+If presence cannot connect or publish, the plugin logs the failed RPC operation and error code, for example `Discord RPC login failed (code: 1)`. Its waiting tooltip shows the same diagnostic. A paused tooltip explains how to resume, even after a previous failure. RPC diagnostics omit raw SDK messages and activity payloads; the existing poll retries when Discord becomes available.
 
 Real Orca/Discord lifecycle acceptance and remote Windows/macOS/Linux CI runs are still pending. The [manual acceptance checklist](#manual-plugin-acceptance) records those checks separately from automated payload and bundle checks.
 
@@ -95,7 +97,7 @@ The entry lives under `HKEY_CURRENT_USER`, so no administrator rights are needed
 
 With an agent open, line 1 reads `Claude +1` and line 2 reads `orca-discord-rpc · Working` or `orca-discord-rpc · Idle`. The large icon uses agent artwork or an Orca fallback, with the model in its tooltip when available; the small branch icon shows the branch in its tooltip. With no agent open, line 1 reads `Using Orca` and line 2 shows the folder. Both retain the session timer. This layout has no View Repository button.
 
-### Orca plugin and standalone Windows app
+### Orca plugin
 
 | Field | Normal | Incognito |
 | --- | --- | --- |
@@ -103,10 +105,14 @@ With an agent open, line 1 reads `Claude +1` and line 2 reads `orca-discord-rpc 
 | Line 2 | `Folder: orca-discord-rpc` | `Folder: Private Project` |
 | Timer | Time since the session started | Same |
 | Large icon | Orca, when uploaded artwork is enabled | Same |
-| Small icon | Branch icon; hovering shows the branch name | Agent icon; hovering shows the model, such as `Claude Opus 5.5` |
+| Small icon | Agent icon; hovering shows its model or agent name | Same |
 | Button | View Repository, when the workspace has a valid web-compatible `origin` remote | None |
 
 With no agent open, line 1 reads `Using Orca` and line 2 shows the folder.
+
+### Standalone Windows app
+
+The Windows tray app uses the same labelled agent/folder lines, timer and repository-button policy. Its normal small icon remains the branch icon with the branch tooltip; Incognito uses the agent/model icon. The plugin's small agent icon in both modes does not change the standalone app's layout.
 
 How each value is chosen:
 
@@ -186,7 +192,7 @@ For standalone modes, environment variables win over the file; the Linux daemon 
 
 For the plugin, set `clientId`, `pollMs` and `useUploadedArt` in the file and reload the plugin after editing them. Manage Incognito in Orca's plugin settings after its first-run migration. Orca scrubs shell environment overrides from workers, so `ORCA_DISCORD_*`, `CODEX_HOME` and `CLAUDE_CONFIG_DIR` overrides are not supported configuration routes in plugin mode.
 
-Oh My Pi is recognized as `omp` and displayed as `Oh My Pi`. In the plugin and Windows tray app, its logo occupies the small agent-icon slot during Incognito Mode; normal mode keeps the branch icon. The public-image fallback uses the [official upstream PNG](https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png). If Discord does not render that URL, upload the PNG to your Discord application's Rich Presence art assets with the key `omp`, then enable `useUploadedArt` for that application. This setting also makes the existing icons use their uploaded keys, so the application needs the other assets you use, including `orca` and `git-branch`. The standalone headless daemon keeps this logo in its large agent-icon slot.
+Oh My Pi is recognized as `omp` and displayed as `Oh My Pi`. Its small plugin icon appears in both normal and Incognito mode. The Windows tray app shows it during Incognito and keeps the branch icon in normal mode. The public-image fallback uses the [official upstream PNG](https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png). If Discord does not render that URL, upload the PNG to your Discord application's Rich Presence art assets with the key `omp`, then enable `useUploadedArt` for that application. This setting also makes the existing icons use their uploaded keys, so the application needs `orca` and each agent asset you use. Standalone modes also need `git-branch`. The standalone headless daemon keeps this logo in its large agent-icon slot.
 
 ---
 
@@ -234,12 +240,14 @@ Run these checks yourself on Windows, macOS and Linux and record each result per
 
 1. Stop the old presence provider. Load and approve the clean local snapshot, or install the published snapshot through Add Plugin when available, then enable it.
 2. With no panel open and no agent tool calls, confirm presence starts and the native RPC status item updates.
-3. Click RPC to pause, then resume; confirm the same activity returns. Change Incognito and check that the actual folder and branch do not remain visible after the privacy update.
-4. Change the active workspace and agent, including Oh My Pi and an idle open agent. Check the selected folder, agent count, status, model and artwork.
+3. Click RPC to pause, check that its tooltip offers resume, then resume and confirm the same activity returns. Toggle Incognito off/on several times through Settings → Plugins, allowing one default poll interval (15 seconds) for each update. Confirm the small agent/model icon remains in both modes; normal mode shows the actual folder and valid View Repository button, while Incognito shows Private Project and hides the branch and repository. Also change privacy while paused and check it takes effect on resume.
+4. Change the active workspace and agent, including Oh My Pi and an idle open agent. Check the selected folder, agent count, status, model and artwork. No featured agent or no known artwork leaves the small icon absent.
 5. Close/reopen Discord and confirm a later poll retries. Close/reopen Orca and confirm automatic restart without manually starting RPC.
 6. Disable/uninstall the plugin and confirm presence disappears with no detached worker or CLI child. Re-enable it and check startup without opening a panel; for a development folder, unload and load it again.
 7. Check macOS main/Helper app paths and Linux AppImage paths. On Linux, record normal Discord and each supported Snap/Flatpak variant actually tested. Denied socket access should show a retryable waiting state; do not change permissions to make a check pass.
 8. If an external icon is accepted but not displayed, use `useUploadedArt` with matching uploaded asset keys. A correct payload does not prove Discord rendered the image.
+
+For a local snapshot, choose its folder through Settings → Plugins → Add Plugin and complete Orca's access approval yourself. Disable the previous local source before enabling the new one. A temporary `RPC waiting` during privacy reconnect is expected; persistent waiting with Discord open needs the operation/code from the plugin's Settings logs. These checks require no terminal commands from the user.
 
 The repository includes a Windows/macOS/Linux Node CI matrix, but its remote jobs have not run for this local implementation. Record unavailable hosts honestly; they remain release targets and still need real lifecycle acceptance.
 
