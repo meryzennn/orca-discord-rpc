@@ -1,5 +1,5 @@
 import { agentDisplayName, PRESENCE_ASSET_KEY, type PresenceActivity, type PresenceInput } from './presence.ts'
-import { agentArtKey, agentFaviconUrl, BRANCH_ART_KEY, BRANCH_ICON_URL } from './agent-art.ts'
+import { agentArtKey, agentFaviconUrl } from './agent-art.ts'
 import { sanitizeRepoWebUrl } from './git-remote.ts'
 
 function truncate(value: string, limit: number): string {
@@ -26,22 +26,17 @@ export function buildTrayActivity(input: PresenceInput & { incognito?: boolean }
     const suffix = `${count > 1 ? ` +${count - 1}` : ''} · ${status}`
     activity.details = agent ? `Agent: ${truncate(agent, 128 - 7 - suffix.length)}${suffix}` : ''
     activity.state = project || status
-    if (input.incognito) {
-      const key = uploaded ? agentArtKey(input.agentType) : null
-      const url = key ? null : agentFaviconUrl(input.agentType)
-      if (key || url) {
-        if (key) activity.smallImageKey = key
-        else if (url) activity.smallImageUrl = url
-        activity.smallImageText = text(input.model) || text(`Agent: ${agent}`)
-      }
+    const key = uploaded ? agentArtKey(input.agentType) : null
+    const url = key ? null : agentFaviconUrl(input.agentType)
+    if (key || url) {
+      if (key) activity.smallImageKey = key
+      else if (url) activity.smallImageUrl = url
+      activity.smallImageText = text(input.model) || text(`Agent: ${agent}`)
     }
   } else if (count > 1) {
     activity.state = project ? text(`${project} · ${count} agents`) : `${count} agents`
   }
   if (!input.incognito) {
-    activity.smallImageText = text(input.branchName) || 'Branch'
-    if (uploaded) activity.smallImageKey = BRANCH_ART_KEY
-    else activity.smallImageUrl = BRANCH_ICON_URL
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl)
     if (repoUrl) activity.buttons = [{ label: 'View Repository', url: repoUrl }]
   }

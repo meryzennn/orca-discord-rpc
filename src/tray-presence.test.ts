@@ -7,10 +7,10 @@ const base = {
   branchName: 'feature/work', startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true
 }
 
-it('uses tray agent/status/folder labels and normal branch art with a sanitized repository button', () => {
+it('uses tray agent/status/folder labels and normal agent art with a sanitized repository button', () => {
   assert.deepEqual(buildTrayActivity({ ...base, repoUrl: 'https://user:secret@github.com:443/owner/repo?token=secret#anchor' }), {
     details: 'Agent: Claude +1 · Working', state: 'Folder: sample', startTimestamp: base.startedAt,
-    largeImageKey: 'orca', largeImageText: 'Orca', smallImageKey: 'git-branch', smallImageText: 'feature/work',
+    largeImageKey: 'orca', largeImageText: 'Orca', smallImageKey: 'claude', smallImageText: 'Agent: Claude',
     buttons: [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
   })
   assert.equal(buildTrayActivity({ ...base, agentActive: false }).details, 'Agent: Claude +1 · Idle')
@@ -25,13 +25,31 @@ it('uses the tray Orca/count/status fallbacks without duplicate folder labels', 
   assert.equal(buildTrayActivity({ ...base, projectName: 'x', agentActive: false }).state, 'Idle')
 })
 
-it('uses only the branch favicon in normal mode without uploaded artwork', () => {
-  const activity = buildTrayActivity({ ...base, useUploadedArt: false, branchName: ' feature/  normalized\n branch ' })
-  assert.equal(activity.largeImageKey, undefined)
-  assert.equal(activity.largeImageUrl, undefined)
-  assert.equal(activity.smallImageUrl, 'https://www.google.com/s2/favicons?domain=git-scm.com&sz=128')
-  assert.equal(activity.smallImageText, 'feature/ normalized branch')
-  assert.equal(buildTrayActivity({ ...base, branchName: 'x' }).smallImageText, 'Branch')
+it('uses the featured agent and model in either mode with either artwork source', () => {
+  for (const incognito of [false, true]) {
+    for (const useUploadedArt of [false, true]) {
+      const activity = buildTrayActivity({ ...base, incognito, useUploadedArt,
+        model: ' Claude\n Opus 5.5 ', repoUrl: 'https://github.com/owner/repo' })
+      assert.equal(activity.smallImageKey, useUploadedArt ? 'claude' : undefined)
+      assert.equal(activity.smallImageUrl, useUploadedArt ? undefined :
+        'https://www.google.com/s2/favicons?domain=claude.ai&sz=256')
+      assert.equal(activity.smallImageText, 'Claude Opus 5.5')
+      assert.equal(activity.state, incognito ? 'Folder: Private Project' : 'Folder: sample')
+      assert.equal(activity.buttons?.[0]?.label, incognito ? undefined : 'View Repository')
+      assert.ok(!JSON.stringify(activity).includes('feature/work'))
+    }
+  }
+})
+
+it('has no branch fallback when the featured agent has no artwork', () => {
+  for (const incognito of [false, true]) {
+    for (const agentType of [null, 'unknown']) {
+      const activity = buildTrayActivity({ ...base, incognito, agentType })
+      assert.equal(activity.smallImageKey, undefined)
+      assert.equal(activity.smallImageUrl, undefined)
+      assert.equal(activity.smallImageText, undefined)
+    }
+  }
 })
 
 it('redacts folder, branch and repository in Incognito and uses the small agent/model slot', () => {
@@ -47,16 +65,18 @@ it('redacts folder, branch and repository in Incognito and uses the small agent/
 })
 
 it('uses public agent fallbacks when upload mappings are absent and no icon for an unknown agent', () => {
-  const activity = buildTrayActivity({ ...base, agentType: 'cursor', incognito: true })
-  assert.equal(activity.smallImageKey, undefined)
-  assert.equal(activity.smallImageUrl, 'https://www.google.com/s2/favicons?domain=cursor.com&sz=256')
-  assert.equal(activity.smallImageText, 'Agent: Cursor')
-  assert.equal(buildTrayActivity({ ...base, agentType: 'unknown', incognito: true }).smallImageText, undefined)
-  assert.equal(buildTrayActivity({ ...base, agentType: null, incognito: true }).smallImageKey, undefined)
-  assert.equal(buildTrayActivity({ ...base, incognito: true, useUploadedArt: false }).smallImageUrl,
-    'https://www.google.com/s2/favicons?domain=claude.ai&sz=256')
-  assert.equal(buildTrayActivity({ ...base, agentType: 'omp', incognito: true, useUploadedArt: false }).smallImageUrl,
-    'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png')
+  for (const incognito of [false, true]) {
+    const activity = buildTrayActivity({ ...base, agentType: 'cursor', incognito })
+    assert.equal(activity.smallImageKey, undefined)
+    assert.equal(activity.smallImageUrl, 'https://www.google.com/s2/favicons?domain=cursor.com&sz=256')
+    assert.equal(activity.smallImageText, 'Agent: Cursor')
+    assert.equal(buildTrayActivity({ ...base, agentType: 'unknown', incognito }).smallImageText, undefined)
+    assert.equal(buildTrayActivity({ ...base, agentType: null, incognito }).smallImageKey, undefined)
+    assert.equal(buildTrayActivity({ ...base, incognito, useUploadedArt: false }).smallImageUrl,
+      'https://www.google.com/s2/favicons?domain=claude.ai&sz=256')
+    assert.equal(buildTrayActivity({ ...base, agentType: 'omp', incognito, useUploadedArt: false }).smallImageUrl,
+      'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png')
+  }
 })
 
 it('keeps brand spellings, limits and unicode boundaries while preserving the agent count/status', () => {
@@ -67,7 +87,8 @@ it('keeps brand spellings, limits and unicode boundaries while preserving the ag
   const activity = buildTrayActivity({ ...base, projectName: long, agentType: long, branchName: long, model: long })
   assert.ok(activity.state.length <= 100)
   assert.ok(activity.details.endsWith(' +1 · Working'))
-  for (const value of [activity.state, activity.details, activity.smallImageText]) {
+  assert.equal(activity.smallImageText, undefined)
+  for (const value of [activity.state, activity.details]) {
     assert.ok(value && value.length >= 2 && value.length <= 128)
     assert.doesNotMatch(value, /[\uD800-\uDFFF]/u)
   }

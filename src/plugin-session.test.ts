@@ -94,7 +94,7 @@ it('redacts private state before the reused builder and clears before changing p
   await h.session.setIncognito(false)
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
   assert.equal(h.pushed[1]?.state, 'Folder: secret-project')
-  assert.equal(h.pushed[1]?.smallImageText, 'secret-branch')
+  assert.equal(h.pushed[1]?.smallImageText, 'Agent: Oh My Pi')
   assert.deepEqual(h.pushed[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/secret-owner/secret-repo' }])
   await h.session.stop()
 })
