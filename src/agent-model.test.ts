@@ -177,6 +177,27 @@ describe('findAgentModel', () => {
     assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Opus 5.5')
   })
 
+  it('ignores auxiliary OMP model usage and unrelated tool metadata', () => {
+    freshHome()
+    const bucket = join(home, '.omp', 'agent', 'sessions', 'workspace')
+    mkdirSync(bucket, { recursive: true })
+    const file = join(bucket, 'session.jsonl')
+    const records = [
+      { type: 'session', version: 3, cwd: '/home/me/app' },
+      { type: 'model_change', model: 'anthropic/claude-sonnet-5-5' },
+      { type: 'message', message: { role: 'assistant', model: 'claude-sonnet-5-5' } },
+      { type: 'model_usage', purpose: 'title-drift', role: 'judge', model: 'openai/gpt-4o' }
+    ]
+    writeFileSync(file, records.map(record => JSON.stringify(record)).join('\n') + '\n')
+    const sources = { env: noEnv, home }
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Sonnet 5.5')
+    appendFileSync(file, JSON.stringify({ type: 'message', message: { role: 'toolResult', model: 'openai/gpt-4o' } }) + '\n')
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Sonnet 5.5')
+    appendFileSync(file, JSON.stringify({ type: 'model_change', role: 'default', model: 'anthropic/claude-opus-5-5' }) + '\n')
+    appendFileSync(file, JSON.stringify({ type: 'model_usage', purpose: 'auto-graph', model: 'openai/gpt-4o' }) + '\n')
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Opus 5.5')
+  })
+
   it('knows nothing for an unsupported agent or a missing log', () => {
     freshHome()
     assert.equal(findAgentModel('opencode', '/home/me/app', { env: noEnv, home }), null)

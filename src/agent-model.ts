@@ -49,7 +49,7 @@ export function findAgentModel(
     } else {
       return null
     }
-    const raw = log === null ? null : readLastModel(log)
+    const raw = log === null ? null : readLastModel(log, agentType === 'omp' ? lastOmpModelIn : lastModelIn)
     return raw === null ? null : prettyModelName(raw)
   } catch {
     // Why swallowed: an unreadable log must cost only the model name, never the presence.
@@ -180,7 +180,28 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
-function readLastModel(path: string): string | null {
+function lastOmpModelIn(text: string): string | null {
+  let last: string | null = null
+  for (const line of text.split('\n')) {
+    try {
+      const entry: unknown = JSON.parse(line)
+      if (entry === null || typeof entry !== 'object' || !('type' in entry)) continue
+      let model: unknown = null
+      if (entry.type === 'model_change' && 'model' in entry) model = entry.model
+      else if (entry.type === 'message' && 'message' in entry) {
+        const message = entry.message
+        if (message !== null && typeof message === 'object' && 'role' in message &&
+          message.role === 'assistant' && 'model' in message) model = message.model
+      }
+      if (typeof model === 'string' && model.trim() && !model.startsWith('<')) last = model
+    } catch {
+      // A reverse-read block may start or end partway through a JSONL record.
+    }
+  }
+  return last
+}
+
+function readLastModel(path: string, parse: (text: string) => string | null): string | null {
   const fd = openSync(path, 'r')
   try {
     const size = fstatSync(fd).size
@@ -188,7 +209,7 @@ function readLastModel(path: string): string | null {
     let position = Math.max(0, size - TAIL_BYTES)
     while (true) {
       const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position)
-      const model = lastModelIn(buffer.toString('utf8', 0, read))
+      const model = parse(buffer.toString('utf8', 0, read))
       if (model !== null || position === 0) return model
       // Overlap keeps an identifier split across block boundaries intact.
       position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES)
