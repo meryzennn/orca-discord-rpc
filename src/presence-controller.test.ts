@@ -65,8 +65,8 @@ it('uses the injected tray builder and republishes origin edits without resettin
   state = { ...state, repoUrl: 'https://github.com/owner/second' }
   await controller.poll()
   assert.equal(applied.length, 2)
-  assert.equal(applied[0]?.details, 'Agent: Claude · Working')
-  assert.equal(applied[1]?.state, 'Folder: orca')
+  assert.equal(applied[0]?.details, 'Claude · Working')
+  assert.equal(applied[1]?.state, '📁 orca')
   assert.deepEqual(applied[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/owner/second' }])
   assert.equal(applied[1]?.startTimestamp, T0)
 })
@@ -88,7 +88,7 @@ describe('createPresenceController', () => {
     const h = harness(RUNNING)
     await h.controller.poll()
     assert.equal(h.applied.length, 1)
-    assert.equal(h.applied[0]?.details, 'Claude')
+    assert.equal(h.applied[0]?.details, 'Claude · Working')
   })
 
   it('does not re-apply an unchanged reading', async () => {
@@ -105,7 +105,7 @@ describe('createPresenceController', () => {
     h.setState({ ...RUNNING, runningAgentCount: 2 })
     await h.controller.poll()
     assert.equal(h.applied.length, 2)
-    assert.equal(h.applied[1]?.state, 'orca · Working')
+    assert.equal(h.applied[1]?.details, 'Claude +1 · Working')
   })
 
   it('applies when a different agent takes over', async () => {
@@ -113,7 +113,7 @@ describe('createPresenceController', () => {
     await h.controller.poll()
     h.setState({ ...RUNNING, agentType: 'codex' })
     await h.controller.poll()
-    assert.equal(h.applied[1]?.details, 'Codex')
+    assert.equal(h.applied[1]?.details, 'Codex · Working')
   })
 
   it('applies when the model changes', async () => {

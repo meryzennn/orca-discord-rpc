@@ -1,121 +1,199 @@
-import { it } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildPluginActivity } from './plugin-presence.ts'
+import { createAgentRegistry } from './agent-registry.ts'
 
 const base = {
   projectName: 'sample', agentType: 'claude', runningAgentCount: 2,
   branchName: 'feature/work', startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true
 }
+const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=256'
+/** With the u flag this matches only an unpaired surrogate, i.e. a character cut in half. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u
+const ORCA_FAVICON = 'https://www.google.com/s2/favicons?domain=onorca.dev&sz=256'
 
-it('uses tray agent/status/folder labels and normal agent art with a sanitized repository button', () => {
-  assert.deepEqual(buildPluginActivity({ ...base, repoUrl: 'https://user:secret@github.com:443/owner/repo?token=secret#anchor' }), {
-    details: 'Agent: Claude +1 · Working', state: 'Folder: sample', startTimestamp: base.startedAt,
-    largeImageKey: 'orca', largeImageText: 'Orca', smallImageKey: 'claude', smallImageText: 'Agent: Claude',
-    buttons: [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
+describe('card layout', () => {
+  it('puts agent, other panes and status on line 1 and the folder on line 2', () => {
+    assert.deepEqual(buildPluginActivity({ ...base, repoUrl: 'https://user:secret@github.com:443/owner/repo?token=secret#anchor' }), {
+      details: 'Claude +1 · Working', state: '📁 sample', startTimestamp: base.startedAt,
+      largeImageKey: 'orca', largeImageText: 'Orca', smallImageKey: 'claude', smallImageText: 'Claude',
+      buttons: [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
+    })
   })
-  assert.equal(buildPluginActivity({ ...base, agentActive: false }).details, 'Agent: Claude +1 · Idle')
+
+  it('counts one agent, several agents, working and idle', () => {
+    const details = (runningAgentCount: number, agentActive: boolean): string =>
+      buildPluginActivity({ ...base, runningAgentCount, agentActive }).details
+    assert.equal(details(1, true), 'Claude · Working')
+    assert.equal(details(1, false), 'Claude · Idle')
+    assert.equal(details(3, true), 'Claude +2 · Working')
+    assert.equal(details(3, false), 'Claude +2 · Idle')
+  })
+
+  it('keeps status on line 1 while line 2 is the folder', () => {
+    const activity = buildPluginActivity({ ...base, agentActive: false })
+    assert.match(activity.details, /Idle$/)
+    assert.equal(activity.state, '📁 sample')
+  })
+
+  it('shows the status on line 2 only when there is no folder', () => {
+    assert.equal(buildPluginActivity({ ...base, projectName: null, agentActive: false }).state, 'Idle')
+    assert.equal(buildPluginActivity({ ...base, projectName: 'x', agentActive: false }).state, 'Idle')
+  })
+
+  it('has Orca, folder and count fallbacks when no agent is open', () => {
+    assert.equal(buildPluginActivity({ ...base, agentType: null }).details, 'Using Orca')
+    assert.equal(buildPluginActivity({ ...base, agentType: null }).state, '📁 sample · 2 agents')
+    assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null }).state, '2 agents')
+    assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null, runningAgentCount: 0 }).state, 'Orca')
+  })
+
+  it('normalizes whitespace in a folder name', () => {
+    assert.equal(buildPluginActivity({ ...base, projectName: ' sample\n  name ' }).state, '📁 sample name')
+  })
+
+  it('does not strip a folder name that looks like a label', () => {
+    assert.equal(buildPluginActivity({ ...base, projectName: 'Folder: sample' }).state, '📁 Folder: sample')
+  })
 })
 
-it('uses the tray Orca/count/status fallbacks without duplicate folder labels', () => {
-  assert.equal(buildPluginActivity({ ...base, projectName: ' Folder:  sample\n name ' }).state, 'Folder: sample name')
-  assert.equal(buildPluginActivity({ ...base, agentType: null }).details, 'Using Orca')
-  assert.equal(buildPluginActivity({ ...base, agentType: null }).state, 'Folder: sample · 2 agents')
-  assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null }).state, '2 agents')
-  assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null, runningAgentCount: 0 }).state, 'Orca')
-  assert.equal(buildPluginActivity({ ...base, projectName: 'x', agentActive: false }).state, 'Idle')
-})
+describe('Incognito', () => {
+  it('shows the private folder, hides branch and repository, and keeps agent and model', () => {
+    const activity = buildPluginActivity({ ...base, repoUrl: 'https://github.com/secret-owner/secret-repo',
+      model: ' Claude\n Opus 5.5 ', incognito: true })
+    assert.equal(activity.details, 'Claude +1 · Working')
+    assert.equal(activity.state, '📁 Private Project')
+    assert.equal(activity.smallImageKey, 'claude')
+    assert.equal(activity.smallImageText, 'Claude Opus 5.5')
+    assert.equal(activity.buttons, undefined)
+    assert.ok(!JSON.stringify(activity).includes('feature/work'))
+    assert.ok(!JSON.stringify(activity).includes('secret-'))
+  })
 
-it('uses the featured agent and model in either mode with either artwork source', () => {
-  for (const incognito of [false, true]) {
-    for (const useUploadedArt of [false, true]) {
-      const activity = buildPluginActivity({ ...base, incognito, useUploadedArt,
-        model: ' Claude\n Opus 5.5 ', repoUrl: 'https://github.com/owner/repo' })
-      assert.equal(activity.smallImageKey, useUploadedArt ? 'claude' : undefined)
-      assert.equal(activity.smallImageUrl, useUploadedArt ? undefined :
-        'https://www.google.com/s2/favicons?domain=claude.ai&sz=256')
-      assert.equal(activity.smallImageText, 'Claude Opus 5.5')
-      assert.equal(activity.state, incognito ? 'Folder: Private Project' : 'Folder: sample')
-      assert.equal(activity.buttons?.[0]?.label, incognito ? undefined : 'View Repository')
-      assert.ok(!JSON.stringify(activity).includes('feature/work'))
+  it('uses the model tooltip and either artwork source in both modes', () => {
+    for (const incognito of [false, true]) {
+      for (const useUploadedArt of [false, true]) {
+        const activity = buildPluginActivity({ ...base, incognito, useUploadedArt,
+          model: ' Claude\n Opus 5.5 ', repoUrl: 'https://github.com/owner/repo' })
+        assert.equal(activity.smallImageKey, useUploadedArt ? 'claude' : undefined)
+        assert.equal(activity.smallImageUrl, useUploadedArt ? undefined : CLAUDE_FAVICON)
+        assert.equal(activity.smallImageText, 'Claude Opus 5.5')
+        assert.equal(activity.state, incognito ? '📁 Private Project' : '📁 sample')
+        assert.equal(activity.buttons?.[0]?.label, incognito ? undefined : 'View Repository')
+      }
     }
-  }
+  })
 })
 
-it('has no branch fallback when the featured agent has no artwork', () => {
-  for (const incognito of [false, true]) {
-    for (const agentType of [null, 'unknown']) {
-      const activity = buildPluginActivity({ ...base, incognito, agentType })
+describe('agent icon and tooltip', () => {
+  it('names the agent in the tooltip when no model is known', () => {
+    assert.equal(buildPluginActivity({ ...base, agentType: 'omp' }).smallImageText, 'Oh My Pi')
+    assert.equal(buildPluginActivity({ ...base, agentType: 'codex', model: 'GPT-6.1 Sol' }).smallImageText, 'GPT-6.1 Sol')
+  })
+
+  it('uses a public image for an agent without an uploaded asset', () => {
+    const activity = buildPluginActivity({ ...base, agentType: 'cursor' })
+    assert.equal(activity.smallImageKey, undefined)
+    assert.equal(activity.smallImageUrl, 'https://www.google.com/s2/favicons?domain=cursor.com&sz=256')
+    assert.equal(activity.smallImageText, 'Cursor')
+  })
+
+  it('gives an unknown agent a generated name, the Orca icon and the name as tooltip', () => {
+    const uploaded = buildPluginActivity({ ...base, agentType: 'new-agent' })
+    assert.equal(uploaded.details, 'New Agent +1 · Working')
+    assert.equal(uploaded.smallImageKey, 'orca')
+    assert.equal(uploaded.smallImageUrl, undefined)
+    assert.equal(uploaded.smallImageText, 'New Agent')
+    const plain = buildPluginActivity({ ...base, agentType: 'new-agent', useUploadedArt: false })
+    assert.equal(plain.smallImageKey, undefined)
+    assert.equal(plain.smallImageUrl, ORCA_FAVICON)
+  })
+
+  it('has no small icon when no agent is open', () => {
+    for (const incognito of [false, true]) {
+      const activity = buildPluginActivity({ ...base, agentType: null, incognito })
       assert.equal(activity.smallImageKey, undefined)
       assert.equal(activity.smallImageUrl, undefined)
       assert.equal(activity.smallImageText, undefined)
     }
-  }
+  })
+
+  it('applies a user override from the registry', () => {
+    const registry = createAgentRegistry({ overrides: {
+      'new-agent': { name: 'Brand New', asset: 'brandnew', imageUrl: 'https://example.com/new.png' },
+      claude: { name: 'Claude Code' }
+    } })
+    const custom = buildPluginActivity({ ...base, agentType: 'new-agent', registry })
+    assert.equal(custom.details, 'Brand New +1 · Working')
+    assert.equal(custom.smallImageKey, 'brandnew')
+    assert.equal(buildPluginActivity({ ...base, agentType: 'new-agent', registry, useUploadedArt: false }).smallImageUrl,
+      'https://example.com/new.png')
+    const renamed = buildPluginActivity({ ...base, registry })
+    assert.equal(renamed.details, 'Claude Code +1 · Working')
+    assert.equal(renamed.smallImageKey, 'claude')
+  })
 })
 
-it('uses the Codex model tooltip in normal and Incognito while retaining Codex branding', () => {
-  for (const incognito of [false, true]) {
-    const activity = buildPluginActivity({ ...base, agentType: 'codex', model: 'GPT-6.1 Sol', incognito })
-    assert.equal(activity.smallImageKey, 'codex')
-    assert.equal(activity.smallImageText, 'GPT-6.1 Sol')
-    assert.equal(activity.details, 'Agent: Codex +1 · Working')
-  }
+describe('limits and unicode', () => {
+  it('drops a ZWJ sequence whole at the folder boundary instead of splitting it', () => {
+    const family = '👨‍👩‍👧'
+    const activity = buildPluginActivity({ ...base, projectName: `${'a'.repeat(94)}${family}` })
+    assert.equal(activity.state, `📁 ${'a'.repeat(94)}`)
+  })
+
+  it('drops a flag whole at the folder boundary', () => {
+    const activity = buildPluginActivity({ ...base, projectName: `${'a'.repeat(95)}🇯🇵` })
+    assert.equal(activity.state, `📁 ${'a'.repeat(95)}`)
+  })
+
+  it('keeps a whole emoji that fits exactly', () => {
+    const activity = buildPluginActivity({ ...base, projectName: `${'a'.repeat(95)}😀` })
+    assert.equal(activity.state, `📁 ${'a'.repeat(95)}😀`)
+  })
+
+  it('limits very long and non-ASCII folder names without breaking characters', () => {
+    for (const name of ['😀'.repeat(300), '日本語'.repeat(80), 'é'.repeat(500)]) {
+      const activity = buildPluginActivity({ ...base, projectName: name })
+      assert.ok(activity.state.length <= 100, `${activity.state.length}`)
+      assert.ok(activity.state.startsWith('📁 '))
+      assert.doesNotMatch(activity.state, LONE_SURROGATE)
+    }
+  })
+
+  it('keeps the count and status when the agent name is too long', () => {
+    const registry = createAgentRegistry({ overrides: { claude: { name: '😀'.repeat(200) } } })
+    const activity = buildPluginActivity({ ...base, runningAgentCount: 3, registry })
+    assert.ok(activity.details.endsWith(' +2 · Working'))
+    assert.ok(activity.details.length <= 128)
+    assert.doesNotMatch(activity.details, LONE_SURROGATE)
+  })
+
+  it('limits an overlong model tooltip without splitting a character', () => {
+    const model = buildPluginActivity({ ...base, model: `a${'😀'.repeat(100)}` }).smallImageText!
+    assert.ok(model.length <= 128)
+    assert.doesNotMatch(model, LONE_SURROGATE)
+  })
+
+  it('never emits a one-character field', () => {
+    const registry = createAgentRegistry({ overrides: { claude: { name: 'Q' } } })
+    const activity = buildPluginActivity({ ...base, projectName: 'x', registry })
+    assert.equal(activity.details, '')
+    assert.equal(activity.state, 'Working')
+  })
 })
 
-it('redacts folder, branch and repository in Incognito and uses the small agent/model slot', () => {
-  const activity = buildPluginActivity({ ...base, repoUrl: 'https://github.com/secret-owner/secret-repo', model: ' Claude\n Opus 5.5 ', incognito: true })
-  assert.equal(activity.details, 'Agent: Claude +1 · Working')
-  assert.equal(activity.state, 'Folder: Private Project')
-  assert.equal(activity.largeImageKey, 'orca')
-  assert.equal(activity.smallImageKey, 'claude')
-  assert.equal(activity.smallImageText, 'Claude Opus 5.5')
-  assert.equal(activity.buttons, undefined)
-  assert.ok(!JSON.stringify(activity).includes('feature/work'))
-  assert.ok(!JSON.stringify(activity).includes('secret-'))
-})
+describe('repository button', () => {
+  it('rejects invalid or local origins at the final button boundary', () => {
+    for (const repoUrl of ['javascript:alert(1)', 'file:///secret/repo', 'https://', '/local/repo', 'https://github.com',
+      'https://github.com/owner\\repo', 'https://github.com/o/%zz', 'https://github.com/o/%00repo',
+      'ssh://git@github.com/owner/repo', 'git@github.com:owner/repo.git']) {
+      assert.equal(buildPluginActivity({ ...base, repoUrl }).buttons, undefined, repoUrl)
+    }
+  })
 
-it('uses public agent fallbacks when upload mappings are absent and no icon for an unknown agent', () => {
-  for (const incognito of [false, true]) {
-    const activity = buildPluginActivity({ ...base, agentType: 'cursor', incognito })
-    assert.equal(activity.smallImageKey, undefined)
-    assert.equal(activity.smallImageUrl, 'https://www.google.com/s2/favicons?domain=cursor.com&sz=256')
-    assert.equal(activity.smallImageText, 'Agent: Cursor')
-    assert.equal(buildPluginActivity({ ...base, agentType: 'unknown', incognito }).smallImageText, undefined)
-    assert.equal(buildPluginActivity({ ...base, agentType: null, incognito }).smallImageKey, undefined)
-    assert.equal(buildPluginActivity({ ...base, incognito, useUploadedArt: false }).smallImageUrl,
-      'https://www.google.com/s2/favicons?domain=claude.ai&sz=256')
-    assert.equal(buildPluginActivity({ ...base, agentType: 'omp', incognito, useUploadedArt: false }).smallImageUrl,
-      'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png')
-  }
-})
-
-it('keeps brand spellings, limits and unicode boundaries while preserving the agent count/status', () => {
-  for (const [agentType, name] of [['opencode2', 'OpenCode'], ['omp', 'Oh My Pi'], ['qwen-code', 'Qwen Code'], ['claude-agent-teams', 'Claude']]) {
-    assert.equal(buildPluginActivity({ ...base, agentType: agentType! }).details, `Agent: ${name} +1 · Working`)
-  }
-  const long = '😀'.repeat(100)
-  const activity = buildPluginActivity({ ...base, projectName: long, agentType: long, branchName: long, model: long })
-  assert.ok(activity.state.length <= 100)
-  assert.ok(activity.details.endsWith(' +1 · Working'))
-  assert.equal(activity.smallImageText, undefined)
-  for (const value of [activity.state, activity.details]) {
-    assert.ok(value && value.length >= 2 && value.length <= 128)
-    assert.doesNotMatch(value, /[\uD800-\uDFFF]/u)
-  }
-  const model = buildPluginActivity({ ...base, model: 'a' + long, incognito: true }).smallImageText!
-  assert.ok(model.length <= 128)
-  assert.doesNotMatch(model, /[\uD800-\uDFFF]/u)
-})
-
-it('rejects invalid or local origins at the final button boundary', () => {
-  for (const repoUrl of ['javascript:alert(1)', 'file:///secret/repo', 'https://', '/local/repo', 'https://github.com',
-    'https://github.com/owner\\repo', 'https://github.com/o/%zz', 'https://github.com/o/%00repo',
-    'ssh://git@github.com/owner/repo', 'git@github.com:owner/repo.git']) {
-    assert.equal(buildPluginActivity({ ...base, repoUrl }).buttons, undefined, repoUrl)
-  }
-})
-
-it('redacts a web repository URL without mutating its legitimate Git suffix', () => {
-  assert.deepEqual(buildPluginActivity({ ...base,
-    repoUrl: 'https://user:secret@example.com:8443/owner/repo.git?token=secret#anchor'
-  }).buttons, [{ label: 'View Repository', url: 'https://example.com/owner/repo.git' }])
+  it('redacts a web repository URL without mutating its legitimate Git suffix', () => {
+    assert.deepEqual(buildPluginActivity({ ...base,
+      repoUrl: 'https://user:secret@example.com:8443/owner/repo.git?token=secret#anchor'
+    }).buttons, [{ label: 'View Repository', url: 'https://example.com/owner/repo.git' }])
+  })
 })

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { isRecord } from './type-guards.ts'
+
 // Why baked in: a Discord application id is a public identifier, not a secret, so the
 // daemon works with no setup. Override with ORCA_DISCORD_CLIENT_ID or config.json.
 export const DEFAULT_CLIENT_ID = '1556649058657902712'
@@ -11,12 +14,17 @@ export type AppConfig = {
   pollMs: number
   /** True once the bundled PNGs are uploaded to the Discord application under matching keys. */
   useUploadedArt: boolean
+  /** The raw `agents` map from config.json; the agent registry validates it. */
+  agents?: unknown
 }
 
 export type ConfigFile = {
   clientId?: unknown
   pollMs?: unknown
   useUploadedArt?: unknown
+  agents?: unknown
+  /** Read only by the Orca plugin, to copy a pre-plugin value into Orca's settings once. */
+  incognito?: unknown
 }
 
 export type LoadConfigOptions = {
@@ -55,5 +63,28 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   const useUploadedArt =
     env.ORCA_DISCORD_UPLOADED_ART === '1' || file?.useUploadedArt === true
 
-  return { clientId, pollMs: readPollMs(file?.pollMs), useUploadedArt }
+  return { clientId, pollMs: readPollMs(file?.pollMs), useUploadedArt, agents: file?.agents }
+}
+
+/**
+ * Reads config.json for the plugin and the daemon. A missing file is normal and silent; an
+ * unreadable or malformed one is reported through `log` and treated as absent.
+ */
+export function readConfigFile(path: string, log?: (message: string) => void): ConfigFile | null {
+  let text: string
+  try {
+    text = readFileSync(path, 'utf8')
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? error.code : null
+    if (code !== 'ENOENT') log?.('config.json could not be read; using defaults.')
+    return null
+  }
+  try {
+    const value: unknown = JSON.parse(text.replace(/^\uFEFF/, ''))
+    if (isRecord(value)) return value
+    log?.('config.json must contain a JSON object; using defaults.')
+  } catch {
+    log?.('config.json is not valid JSON; using defaults.')
+  }
+  return null
 }

@@ -3,7 +3,9 @@ import { createPresenceController, type PresenceState } from './presence-control
 import { createOrcaGatedStateReader, type OrcaGatedReader } from './orca-gated-reader.ts'
 import { isOrcaRunning } from './orca-process.ts'
 import { readPresenceState } from './orca-reader.ts'
-import type { PresenceActivity, PresenceInput } from './presence.ts'
+import { findAgentModel } from './agent-model.ts'
+import { builtinRegistry, type AgentRegistry } from './agent-registry.ts'
+import { buildActivity, type PresenceActivity, type PresenceInput } from './presence.ts'
 
 export type PresenceRuntimeStatus = {
   discordConnected: boolean
@@ -30,6 +32,8 @@ export type PresenceRuntimeOptions = {
   pollMs: number
   useUploadedArt: boolean
   buildActivity?: (input: PresenceInput) => PresenceActivity
+  /** Names, artwork and model lookup for agent ids; the built-in entries when absent. */
+  registry?: AgentRegistry
   log?: (line: string) => void
   deps?: PresenceRuntimeDeps
 }
@@ -47,13 +51,15 @@ export type PresenceRuntime = {
 
 export function createPresenceRuntime(options: PresenceRuntimeOptions): PresenceRuntime {
   const log = options.log ?? (() => {})
+  const registry = options.registry ?? builtinRegistry
   const discord: DiscordPresence | null = options.deps
     ? null
     : createDiscordPresence(options.clientId)
 
   const deps: PresenceRuntimeDeps = options.deps ?? {
     isOrcaRunning,
-    readState: readPresenceState,
+    readState: () => readPresenceState(undefined, undefined,
+      (agentType, path) => findAgentModel(agentType, path, undefined, registry)),
     apply: (activity) => discord!.apply(activity),
     clear: () => discord!.clear(),
     connectionGeneration: () => discord!.connectionGeneration(),
@@ -136,7 +142,7 @@ export function createPresenceRuntime(options: PresenceRuntimeOptions): Presence
       clear: () => deps.clear(),
       connectionEpoch: deps.connectionGeneration,
       useUploadedArt: options.useUploadedArt,
-      buildActivity: options.buildActivity
+      buildActivity: options.buildActivity ?? (input => buildActivity({ ...input, registry }))
     })
   }
 

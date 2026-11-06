@@ -69,7 +69,7 @@ describe('createPresenceRuntime', () => {
   it('pushes an activity for the active worktree once started', async () => {
     const h = runtime()
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude|orca · Working'])
+    assert.deepEqual(h.applied, ['Claude · Working|📁 orca'])
   })
 
   it('reports the state it is in', async () => {
@@ -78,7 +78,7 @@ describe('createPresenceRuntime', () => {
     const status = h.instance.getStatus()
     assert.equal(status.discordConnected, true)
     assert.equal(status.orcaRunning, true)
-    assert.equal(status.lastActivity?.details, 'Claude')
+    assert.equal(status.lastActivity?.details, 'Claude · Working')
   })
 
   it('clears the activity when Orca closes', async () => {
@@ -175,11 +175,11 @@ describe('createPresenceRuntime', () => {
     // Discord shows nothing.
     const h = runtime()
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude|orca · Working'])
+    assert.deepEqual(h.applied, ['Claude · Working|📁 orca'])
     await h.instance.pause()
     assert.equal(h.cleared(), 1)
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude|orca · Working', 'Claude|orca · Working'])
+    assert.deepEqual(h.applied, ['Claude · Working|📁 orca', 'Claude · Working|📁 orca'])
   })
 
   it('re-pushes after a stop and start', async () => {

@@ -1,5 +1,4 @@
 // src/orca-plugin.ts
-import { readFileSync as readFileSync2 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 
 // src/discord-ipc.ts
@@ -126,7 +125,7 @@ function createDiscordIpcClient(clientId, paths = defaultPaths()) {
   const send = (opcode, payload) => {
     if (ended || !socket) return;
     try {
-      const body = Buffer.from(JSON.stringify(payload));
+      const body = Buffer.from(JSON.stringify(payload), "utf8");
       if (body.length > MAX_FRAME_BYTES) {
         stop(error("FRAME_TOO_LARGE"));
         return;
@@ -293,7 +292,507 @@ function createDiscordIpcClient(clientId, paths = defaultPaths()) {
   };
 }
 
+// config/agents.json
+var agents_default = {
+  fallback: {
+    asset: "orca",
+    imageUrl: "https://www.google.com/s2/favicons?domain=onorca.dev&sz=256"
+  },
+  branchIcon: {
+    asset: "git-branch",
+    imageUrl: "https://www.google.com/s2/favicons?domain=git-scm.com&sz=128"
+  },
+  agents: {
+    claude: {
+      name: "Claude",
+      asset: "claude",
+      imageUrl: "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      modelResolver: "claude"
+    },
+    "claude-agent-teams": {
+      name: "Claude",
+      asset: "claude",
+      imageUrl: "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      modelResolver: "claude"
+    },
+    codex: {
+      name: "Codex",
+      asset: "codex",
+      imageUrl: "https://www.google.com/s2/favicons?domain=openai.com&sz=256",
+      modelResolver: "codex"
+    },
+    omp: {
+      name: "Oh My Pi",
+      asset: "omp",
+      imageUrl: "https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png",
+      modelResolver: "omp"
+    },
+    antigravity: {
+      name: "Antigravity",
+      asset: "agy",
+      imageUrl: "https://www.google.com/s2/favicons?domain=antigravity.google&sz=256",
+      modelResolver: "antigravity"
+    },
+    agy: {
+      name: "Antigravity",
+      asset: "agy",
+      imageUrl: "https://www.google.com/s2/favicons?domain=antigravity.google&sz=256",
+      modelResolver: "antigravity"
+    },
+    opencode: {
+      name: "OpenCode",
+      asset: "opencode",
+      imageUrl: "https://www.google.com/s2/favicons?domain=opencode.ai&sz=256"
+    },
+    opencode2: {
+      name: "OpenCode",
+      asset: "opencode",
+      imageUrl: "https://www.google.com/s2/favicons?domain=opencode.ai&sz=256"
+    },
+    "command-code": {
+      name: "Command Code",
+      asset: "commandcode",
+      imageUrl: "https://www.google.com/s2/favicons?domain=commandcode.ai&sz=256"
+    },
+    dsh: {
+      asset: "deepsek-harnnes",
+      imageUrl: "https://www.google.com/s2/favicons?domain=deepseek.com&sz=256"
+    },
+    grok: {
+      asset: "grock",
+      imageUrl: "https://www.google.com/s2/favicons?domain=x.ai&sz=256"
+    },
+    hermes: {
+      asset: "hermes",
+      imageUrl: "https://www.google.com/s2/favicons?domain=hermes.nousresearch.com&sz=256"
+    },
+    cursor: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=cursor.com&sz=256"
+    },
+    gemini: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=256"
+    },
+    copilot: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=github.com&sz=256"
+    },
+    amp: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=ampcode.com&sz=256"
+    },
+    aider: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=aider.chat&sz=256"
+    },
+    goose: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=block.github.io&sz=256"
+    },
+    devin: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=devin.ai&sz=256"
+    },
+    kimi: {
+      imageUrl: "https://www.google.com/s2/favicons?domain=kimi.moonshot.cn&sz=256"
+    },
+    "qwen-code": {
+      name: "Qwen Code"
+    }
+  }
+};
+
+// src/type-guards.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// src/agent-registry.ts
+var FIELDS = ["name", "asset", "imageUrl", "modelResolver"];
+function prettifyAgentId(id) {
+  const words = id.split(/[-_\s]+/).filter((part) => part.length > 0).map((part) => {
+    const [first = ""] = part;
+    return first.toUpperCase() + part.slice(first.length);
+  });
+  return words.length > 0 ? words.join(" ") : id;
+}
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+function readOverride(id, raw, note) {
+  if (!isRecord(raw)) {
+    note(`override:${id}`, `config.json agents.${JSON.stringify(id)} must be an object; ignored.`);
+    return {};
+  }
+  const entry = {};
+  for (const field2 of FIELDS) {
+    const value = raw[field2];
+    if (value === void 0) continue;
+    const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+    const valid = text.length > 0 && (field2 === "imageUrl" ? isHttpsUrl(text) : true) && (field2 === "asset" || field2 === "modelResolver" ? !/\s/.test(text) : true);
+    if (valid) entry[field2] = text;
+    else note(
+      `override:${id}:${field2}`,
+      `config.json agents.${JSON.stringify(id)}.${field2} is not valid${field2 === "imageUrl" ? " (an https URL is required)" : ""}; ignored.`
+    );
+  }
+  return entry;
+}
+function createAgentRegistry(options = {}) {
+  const file = agents_default;
+  const seen = /* @__PURE__ */ new Set();
+  const noteOnce = (key, message) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    try {
+      options.log?.(message);
+    } catch {
+    }
+  };
+  const entries = new Map(Object.entries(file.agents));
+  const { overrides } = options;
+  if (overrides !== void 0) {
+    if (!isRecord(overrides)) {
+      noteOnce("overrides", 'config.json "agents" must be an object of agent ids; ignored.');
+    } else {
+      for (const [id, raw] of Object.entries(overrides)) {
+        entries.set(id, { ...entries.get(id), ...readOverride(id, raw, noteOnce) });
+      }
+    }
+  }
+  return {
+    resolve(id) {
+      const entry = entries.get(id);
+      if (entry === void 0) {
+        noteOnce(
+          `unknown:${id}`,
+          `Unknown agent id ${JSON.stringify(id.slice(0, 64))}: using a generated name and the fallback icon. Add it under "agents" in config.json to set a name, image and model resolver.`
+        );
+        return { id, name: prettifyAgentId(id), asset: null, imageUrl: null, modelResolver: null, known: false };
+      }
+      return {
+        id,
+        name: entry.name ?? prettifyAgentId(id),
+        asset: entry.asset ?? null,
+        imageUrl: entry.imageUrl ?? null,
+        modelResolver: entry.modelResolver ?? null,
+        known: true
+      };
+    },
+    fallbackIcon: file.fallback,
+    branchIcon: file.branchIcon,
+    noteOnce
+  };
+}
+var builtinRegistry = createAgentRegistry();
+
+// src/agent-model.ts
+import { homedir } from "node:os";
+
+// src/model-resolvers/antigravity.ts
+import { closeSync as closeSync2, existsSync as existsSync3, fstatSync as fstatSync2, openSync as openSync2, readFileSync, readSync as readSync2 } from "node:fs";
+import { join as join2 } from "node:path";
+
+// src/model-resolvers/session-files.ts
+import { closeSync, existsSync as existsSync2, fstatSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
+var TAIL_BYTES = 64 * 1024;
+var MODEL_OVERLAP_BYTES = 1024;
+var HEAD_BYTES = 16 * 1024;
+var SESSIONS_SCANNED = 50;
+var MODEL_FIELD = /"model":"([^"]+)"/g;
+var CWD_FIELD = /"cwd":("(?:[^"\\]|\\.)*")/;
+var IS_WINDOWS = process.platform === "win32";
+function lastModelIn(text) {
+  let last = null;
+  for (const match of text.matchAll(MODEL_FIELD)) {
+    const value = match[1] ?? "";
+    if (!value.startsWith("<")) {
+      last = value;
+    }
+  }
+  return last;
+}
+function nonEmpty(value) {
+  return value !== void 0 && value.trim().length > 0 ? value : void 0;
+}
+function samePath(a, b) {
+  return IS_WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+function normalizePath(path) {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+function newestOf(files) {
+  let best = null;
+  let bestAt = -Infinity;
+  for (const file of files) {
+    const at = statSync(file).mtimeMs;
+    if (at > bestAt) {
+      best = file;
+      bestAt = at;
+    }
+  }
+  return best;
+}
+function newestWorkspaceSession(sessions, worktreePath, layout) {
+  if (!existsSync2(sessions)) {
+    return null;
+  }
+  const wanted = normalizePath(worktreePath);
+  const names = layout === "codex" ? readdirSync(sessions, { recursive: true, encoding: "utf8" }).filter((name) => basename(name).startsWith("rollout-") && name.endsWith(".jsonl")) : readdirSync(sessions, { withFileTypes: true }).flatMap((bucket) => bucket.isDirectory() ? readdirSync(join(sessions, bucket.name), { withFileTypes: true }).filter((file) => file.isFile() && file.name.endsWith(".jsonl")).map((file) => join(bucket.name, file.name)) : []);
+  const recent = names.map((name) => {
+    const file = join(sessions, name);
+    return { file, at: statSync(file).mtimeMs };
+  }).sort((a, b) => b.at - a.at).slice(0, SESSIONS_SCANNED);
+  for (const { file } of recent) {
+    const cwd = CWD_FIELD.exec(readSlice(file, "head", HEAD_BYTES))?.[1];
+    if (cwd !== void 0 && samePath(normalizePath(JSON.parse(cwd)), wanted)) {
+      return file;
+    }
+  }
+  return null;
+}
+function readLastModel(path, parse) {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
+    let position = Math.max(0, size - TAIL_BYTES);
+    while (true) {
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
+      const model = parse(buffer.toString("utf8", 0, read));
+      if (model !== null || position === 0) return model;
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+function readSlice(path, end, bytes) {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const length = Math.min(bytes, size);
+    const buffer = Buffer.alloc(length);
+    const read = readSync(fd, buffer, 0, length, end === "tail" ? size - length : 0);
+    return buffer.toString("utf8", 0, read);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// src/model-resolvers/antigravity.ts
+var SETTINGS_CHANGE = /<USER_SETTINGS_CHANGE>([\s\S]*?)<\/USER_SETTINGS_CHANGE>/g;
+var MODEL_CHANGE = /`Model Selection` (?:from [^\n`]+? )?to ([^\n`]+?)(?:\.\s|\.?$)/g;
+function lastAntigravityModelIn(text) {
+  let last = null;
+  for (const line of text.split("\n")) {
+    let content;
+    try {
+      const entry = JSON.parse(line);
+      if (entry === null || typeof entry !== "object" || !("source" in entry) || entry.source !== "USER_EXPLICIT" || !("content" in entry)) continue;
+      content = entry.content;
+    } catch {
+      continue;
+    }
+    if (typeof content !== "string") continue;
+    for (const change of content.matchAll(SETTINGS_CHANGE)) {
+      for (const match of (change[1] ?? "").matchAll(MODEL_CHANGE)) {
+        const model = match[1]?.trim();
+        if (model && !model.startsWith("<")) last = model;
+      }
+    }
+  }
+  return last;
+}
+function defaultAntigravityModel(agyHome) {
+  for (const dir of [agyHome, join2(agyHome, "..")]) {
+    const settings = join2(dir, "settings.json");
+    if (!existsSync3(settings)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(settings, "utf8").replace(/^\uFEFF/, ""));
+      if (raw && typeof raw === "object" && "model" in raw && typeof raw.model === "string" && raw.model.trim()) {
+        return raw.model.trim();
+      }
+    } catch {
+    }
+  }
+  return null;
+}
+function newestAntigravityConversation(agyHome, worktreePath) {
+  const history = join2(agyHome, "history.jsonl");
+  if (!existsSync3(history)) return null;
+  const wanted = normalizePath(worktreePath);
+  const fd = openSync2(history, "r");
+  try {
+    const size = fstatSync2(fd).size;
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
+    let position = Math.max(0, size - buffer.length);
+    while (position >= 0) {
+      const read = readSync2(fd, buffer, 0, Math.min(buffer.length, size - position), position);
+      const lines = buffer.toString("utf8", 0, read).split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]?.trim();
+        if (!line) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry && typeof entry === "object" && "workspace" in entry && typeof entry.workspace === "string") {
+            if (samePath(normalizePath(entry.workspace), wanted) && "conversationId" in entry && typeof entry.conversationId === "string") {
+              return entry.conversationId;
+            }
+          }
+        } catch {
+        }
+      }
+      if (position === 0) break;
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
+    }
+  } finally {
+    closeSync2(fd);
+  }
+  return null;
+}
+function newestAntigravityModel(agyHome, worktreePath) {
+  if (!existsSync3(agyHome)) return null;
+  const conversationId = newestAntigravityConversation(agyHome, worktreePath);
+  if (conversationId) {
+    const transcript = join2(agyHome, "brain", conversationId, ".system_generated", "logs", "transcript.jsonl");
+    if (existsSync3(transcript)) {
+      const fromTranscript = readLastModel(transcript, lastAntigravityModelIn);
+      if (fromTranscript) return fromTranscript;
+    }
+  }
+  return defaultAntigravityModel(agyHome);
+}
+var resolveAntigravityModel = (worktreePath, sources) => newestAntigravityModel(nonEmpty(sources.env("ANTIGRAVITY_HOME")) ?? join2(sources.home, ".gemini", "antigravity-cli"), worktreePath);
+
+// src/model-resolvers/claude.ts
+import { existsSync as existsSync4, readdirSync as readdirSync2 } from "node:fs";
+import { join as join3 } from "node:path";
+function claudeProjectSlug(path) {
+  return path.replace(/[^A-Za-z0-9]/g, "-");
+}
+function newestClaudeSession(claudeHome, worktreePath) {
+  const projects = join3(claudeHome, "projects");
+  if (!existsSync4(projects)) {
+    return null;
+  }
+  const slug = claudeProjectSlug(worktreePath.replace(/[/\\]+$/, ""));
+  const files = readdirSync2(projects, { withFileTypes: true }).filter((entry) => entry.isDirectory() && samePath(entry.name, slug)).flatMap(
+    (entry) => readdirSync2(join3(projects, entry.name)).filter((name) => name.endsWith(".jsonl")).map((name) => join3(projects, entry.name, name))
+  );
+  return newestOf(files);
+}
+var resolveClaudeModel = (worktreePath, sources) => {
+  const log = newestClaudeSession(nonEmpty(sources.env("CLAUDE_CONFIG_DIR")) ?? join3(sources.home, ".claude"), worktreePath);
+  return log === null ? null : readLastModel(log, lastModelIn);
+};
+
+// src/model-resolvers/codex.ts
+import { join as join4 } from "node:path";
+var resolveCodexModel = (worktreePath, sources) => {
+  const codexHome = nonEmpty(sources.env("CODEX_HOME")) ?? join4(sources.home, ".codex");
+  const log = newestWorkspaceSession(join4(codexHome, "sessions"), worktreePath, "codex");
+  return log === null ? null : readLastModel(log, lastModelIn);
+};
+
+// src/model-resolvers/omp.ts
+import { join as join5 } from "node:path";
+function lastOmpModelIn(text) {
+  let last = null;
+  for (const line of text.split("\n")) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry === null || typeof entry !== "object" || !("type" in entry)) continue;
+      let model = null;
+      if (entry.type === "model_change" && "model" in entry) model = entry.model;
+      else if (entry.type === "message" && "message" in entry) {
+        const message = entry.message;
+        if (message !== null && typeof message === "object" && "role" in message && message.role === "assistant" && "model" in message) model = message.model;
+      }
+      if (typeof model === "string" && model.trim() && !model.startsWith("<")) last = model;
+    } catch {
+    }
+  }
+  return last;
+}
+var resolveOmpModel = (worktreePath, sources) => {
+  const agentDir = nonEmpty(sources.env("PI_CODING_AGENT_DIR")) ?? join5(sources.home, ".omp", "agent");
+  const log = newestWorkspaceSession(join5(agentDir, "sessions"), worktreePath, "omp");
+  return log === null ? null : readLastModel(log, lastOmpModelIn);
+};
+
+// src/model-resolvers/index.ts
+var MODEL_RESOLVERS = {
+  claude: resolveClaudeModel,
+  codex: resolveCodexModel,
+  omp: resolveOmpModel,
+  antigravity: resolveAntigravityModel
+};
+function modelResolverFor(id) {
+  return Object.hasOwn(MODEL_RESOLVERS, id) ? MODEL_RESOLVERS[id] ?? null : null;
+}
+
+// src/agent-model.ts
+var defaultSources = { env: (name) => process.env[name], home: homedir() };
+function findAgentModel(agentType, worktreePath, sources = defaultSources, registry = builtinRegistry) {
+  if (!agentType || !worktreePath) {
+    return null;
+  }
+  const agent = registry.resolve(agentType);
+  if (agent.modelResolver === null) {
+    return null;
+  }
+  const resolver = modelResolverFor(agent.modelResolver);
+  if (resolver === null) {
+    registry.noteOnce(
+      `resolver:${agent.modelResolver}`,
+      `Agent ${JSON.stringify(agentType.slice(0, 64))} names the unknown model resolver ${JSON.stringify(agent.modelResolver.slice(0, 64))}; showing the agent name instead.`
+    );
+    return null;
+  }
+  try {
+    const raw = resolver(worktreePath, sources);
+    return raw === null ? null : prettyModelName(raw);
+  } catch (error2) {
+    const code = error2 instanceof Error && "code" in error2 && typeof error2.code === "string" ? error2.code : "error";
+    registry.noteOnce(
+      `model:${agentType}:${code}`,
+      `Model lookup for agent ${JSON.stringify(agentType.slice(0, 64))} failed (${code}); showing the agent name instead.`
+    );
+    return null;
+  }
+}
+function prettyModelName(raw) {
+  let id = raw.trim();
+  const bracket = id.indexOf("[");
+  if (bracket > 0) {
+    id = id.slice(0, bracket);
+  }
+  id = id.slice(id.lastIndexOf("/") + 1);
+  const parts = id.split(/[-_]/).filter((part) => part.length > 0);
+  if (parts.length > 1 && /^[0-9]{8}$/.test(parts[parts.length - 1] ?? "")) {
+    parts.pop();
+  }
+  const words = [];
+  for (const part of parts) {
+    const previous = words[words.length - 1];
+    if (previous !== void 0 && isVersion(part) && isVersion(previous)) {
+      words[words.length - 1] = `${previous}.${part}`;
+    } else if (previous === "GPT" && /^[0-9]/.test(part)) {
+      words[words.length - 1] = `GPT-${part}`;
+    } else if (part.toLowerCase() === "gpt") {
+      words.push("GPT");
+    } else {
+      words.push(part[0].toUpperCase() + part.slice(1));
+    }
+  }
+  return words.join(" ");
+}
+function isVersion(part) {
+  return /^[0-9.]+$/.test(part);
+}
+
 // src/config.ts
+import { readFileSync as readFileSync2 } from "node:fs";
 var DEFAULT_CLIENT_ID = "1556649058657902712";
 var DEFAULT_POLL_MS = 15e3;
 var MIN_POLL_MS = 5e3;
@@ -315,22 +814,40 @@ function loadConfig(options = {}) {
   const fileClientId = typeof file?.clientId === "string" ? file.clientId : void 0;
   const clientId = envClientId && envClientId.length > 0 ? envClientId : fileClientId && fileClientId.length > 0 ? fileClientId : DEFAULT_CLIENT_ID;
   const useUploadedArt = env.ORCA_DISCORD_UPLOADED_ART === "1" || file?.useUploadedArt === true;
-  return { clientId, pollMs: readPollMs(file?.pollMs), useUploadedArt };
+  return { clientId, pollMs: readPollMs(file?.pollMs), useUploadedArt, agents: file?.agents };
+}
+function readConfigFile(path, log) {
+  let text;
+  try {
+    text = readFileSync2(path, "utf8");
+  } catch (error2) {
+    const code = error2 instanceof Error && "code" in error2 ? error2.code : null;
+    if (code !== "ENOENT") log?.("config.json could not be read; using defaults.");
+    return null;
+  }
+  try {
+    const value = JSON.parse(text.replace(/^\uFEFF/, ""));
+    if (isRecord(value)) return value;
+    log?.("config.json must contain a JSON object; using defaults.");
+  } catch {
+    log?.("config.json is not valid JSON; using defaults.");
+  }
+  return null;
 }
 
 // src/paths.ts
-import { join } from "node:path";
-import { homedir, platform } from "node:os";
+import { join as join6 } from "node:path";
+import { homedir as homedir2, platform } from "node:os";
 function appDir() {
   if (platform() === "win32") {
-    return join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "orca-discord-rpc");
+    return join6(process.env.LOCALAPPDATA ?? join6(homedir2(), "AppData", "Local"), "orca-discord-rpc");
   }
   if (platform() === "darwin") {
-    return join(homedir(), "Library", "Application Support", "orca-discord-rpc");
+    return join6(homedir2(), "Library", "Application Support", "orca-discord-rpc");
   }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "orca-discord-rpc");
+  return join6(process.env.XDG_CONFIG_HOME ?? join6(homedir2(), ".config"), "orca-discord-rpc");
 }
-var configPath = () => join(appDir(), "config.json");
+var configPath = () => join6(appDir(), "config.json");
 
 // src/discord.ts
 function createDiscordPresence(clientId, createClient = (id) => createDiscordIpcClient(id)) {
@@ -472,7 +989,7 @@ import { win32 as win322 } from "node:path";
 // src/orca-state.ts
 var LIVE_AGENT_STATES = /* @__PURE__ */ new Set(["working", "blocked", "waiting"]);
 var MIN_AGENT_STATE_STARTED_AT = 1e12;
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null;
 }
 function parseWorktreePs(stdout) {
@@ -482,16 +999,16 @@ function parseWorktreePs(stdout) {
   } catch {
     return [];
   }
-  if (!isRecord(parsed) || parsed.ok !== true || !isRecord(parsed.result)) {
+  if (!isRecord2(parsed) || parsed.ok !== true || !isRecord2(parsed.result)) {
     return [];
   }
   const worktrees = parsed.result.worktrees;
   if (!Array.isArray(worktrees)) {
     return [];
   }
-  return worktrees.filter(isRecord).map((worktree) => ({
+  return worktrees.filter(isRecord2).map((worktree) => ({
     ...worktree,
-    agents: Array.isArray(worktree.agents) ? worktree.agents.filter(isRecord) : []
+    agents: Array.isArray(worktree.agents) ? worktree.agents.filter(isRecord2) : []
   }));
 }
 function selectActiveWorktree(worktrees) {
@@ -573,255 +1090,6 @@ function runningAgentCount(worktree) {
   return openAgents(worktree).length;
 }
 
-// src/agent-model.ts
-import { closeSync, existsSync as existsSync2, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
-import { basename, join as join2 } from "node:path";
-import { homedir as homedir2 } from "node:os";
-var TAIL_BYTES = 64 * 1024;
-var MODEL_OVERLAP_BYTES = 1024;
-var HEAD_BYTES = 16 * 1024;
-var SESSIONS_SCANNED = 50;
-var MODEL_FIELD = /"model":"([^"]+)"/g;
-var CWD_FIELD = /"cwd":("(?:[^"\\]|\\.)*")/;
-var IS_WINDOWS = process.platform === "win32";
-var defaultSources = { env: (name) => process.env[name], home: homedir2() };
-function findAgentModel(agentType, worktreePath, sources = defaultSources) {
-  if (!agentType || !worktreePath) {
-    return null;
-  }
-  try {
-    let log;
-    if (agentType === "claude" || agentType === "claude-agent-teams") {
-      log = newestClaudeSession(nonEmpty(sources.env("CLAUDE_CONFIG_DIR")) ?? join2(sources.home, ".claude"), worktreePath);
-    } else if (agentType === "codex") {
-      const codexHome = nonEmpty(sources.env("CODEX_HOME")) ?? join2(sources.home, ".codex");
-      log = newestWorkspaceSession(join2(codexHome, "sessions"), worktreePath, "codex");
-    } else if (agentType === "omp") {
-      const agentDir = nonEmpty(sources.env("PI_CODING_AGENT_DIR")) ?? join2(sources.home, ".omp", "agent");
-      log = newestWorkspaceSession(join2(agentDir, "sessions"), worktreePath, "omp");
-    } else if (agentType === "antigravity" || agentType === "agy") {
-      const agyHome = nonEmpty(sources.env("ANTIGRAVITY_HOME")) ?? join2(sources.home, ".gemini", "antigravity-cli");
-      const raw2 = newestAntigravityModel(agyHome, worktreePath);
-      return raw2 === null ? null : prettyModelName(raw2);
-    } else {
-      return null;
-    }
-    const raw = log === null ? null : readLastModel(log, agentType === "omp" ? lastOmpModelIn : lastModelIn);
-    return raw === null ? null : prettyModelName(raw);
-  } catch {
-    return null;
-  }
-}
-function claudeProjectSlug(path) {
-  return path.replace(/[^A-Za-z0-9]/g, "-");
-}
-function lastModelIn(text2) {
-  let last = null;
-  for (const match of text2.matchAll(MODEL_FIELD)) {
-    const value = match[1] ?? "";
-    if (!value.startsWith("<")) {
-      last = value;
-    }
-  }
-  return last;
-}
-function prettyModelName(raw) {
-  let id = raw.trim();
-  const bracket = id.indexOf("[");
-  if (bracket > 0) {
-    id = id.slice(0, bracket);
-  }
-  id = id.slice(id.lastIndexOf("/") + 1);
-  const parts = id.split(/[-_]/).filter((part) => part.length > 0);
-  if (parts.length > 1 && /^[0-9]{8}$/.test(parts[parts.length - 1] ?? "")) {
-    parts.pop();
-  }
-  const words = [];
-  for (const part of parts) {
-    const previous = words[words.length - 1];
-    if (previous !== void 0 && isVersion(part) && isVersion(previous)) {
-      words[words.length - 1] = `${previous}.${part}`;
-    } else if (previous === "GPT" && /^[0-9]/.test(part)) {
-      words[words.length - 1] = `GPT-${part}`;
-    } else if (part.toLowerCase() === "gpt") {
-      words.push("GPT");
-    } else {
-      words.push(part[0].toUpperCase() + part.slice(1));
-    }
-  }
-  return words.join(" ");
-}
-function isVersion(part) {
-  return /^[0-9.]+$/.test(part);
-}
-function nonEmpty(value) {
-  return value !== void 0 && value.trim().length > 0 ? value : void 0;
-}
-function samePath(a, b) {
-  return IS_WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-function newestOf(files) {
-  let best = null;
-  let bestAt = -Infinity;
-  for (const file of files) {
-    const at = statSync(file).mtimeMs;
-    if (at > bestAt) {
-      best = file;
-      bestAt = at;
-    }
-  }
-  return best;
-}
-function newestClaudeSession(claudeHome, worktreePath) {
-  const projects = join2(claudeHome, "projects");
-  if (!existsSync2(projects)) {
-    return null;
-  }
-  const slug = claudeProjectSlug(worktreePath.replace(/[/\\]+$/, ""));
-  const files = readdirSync(projects, { withFileTypes: true }).filter((entry) => entry.isDirectory() && samePath(entry.name, slug)).flatMap(
-    (entry) => readdirSync(join2(projects, entry.name)).filter((name) => name.endsWith(".jsonl")).map((name) => join2(projects, entry.name, name))
-  );
-  return newestOf(files);
-}
-function newestWorkspaceSession(sessions, worktreePath, layout) {
-  if (!existsSync2(sessions)) {
-    return null;
-  }
-  const wanted = normalizePath(worktreePath);
-  const names = layout === "codex" ? readdirSync(sessions, { recursive: true, encoding: "utf8" }).filter((name) => basename(name).startsWith("rollout-") && name.endsWith(".jsonl")) : readdirSync(sessions, { withFileTypes: true }).flatMap((bucket) => bucket.isDirectory() ? readdirSync(join2(sessions, bucket.name), { withFileTypes: true }).filter((file) => file.isFile() && file.name.endsWith(".jsonl")).map((file) => join2(bucket.name, file.name)) : []);
-  const recent = names.map((name) => {
-    const file = join2(sessions, name);
-    return { file, at: statSync(file).mtimeMs };
-  }).sort((a, b) => b.at - a.at).slice(0, SESSIONS_SCANNED);
-  for (const { file } of recent) {
-    const cwd = CWD_FIELD.exec(readSlice(file, "head", HEAD_BYTES))?.[1];
-    if (cwd !== void 0 && samePath(normalizePath(JSON.parse(cwd)), wanted)) {
-      return file;
-    }
-  }
-  return null;
-}
-function normalizePath(path) {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-function lastOmpModelIn(text2) {
-  let last = null;
-  for (const line of text2.split("\n")) {
-    try {
-      const entry = JSON.parse(line);
-      if (entry === null || typeof entry !== "object" || !("type" in entry)) continue;
-      let model = null;
-      if (entry.type === "model_change" && "model" in entry) model = entry.model;
-      else if (entry.type === "message" && "message" in entry) {
-        const message = entry.message;
-        if (message !== null && typeof message === "object" && "role" in message && message.role === "assistant" && "model" in message) model = message.model;
-      }
-      if (typeof model === "string" && model.trim() && !model.startsWith("<")) last = model;
-    } catch {
-    }
-  }
-  return last;
-}
-function readLastModel(path, parse) {
-  const fd = openSync(path, "r");
-  try {
-    const size = fstatSync(fd).size;
-    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
-    let position = Math.max(0, size - TAIL_BYTES);
-    while (true) {
-      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
-      const model = parse(buffer.toString("utf8", 0, read));
-      if (model !== null || position === 0) return model;
-      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
-    }
-  } finally {
-    closeSync(fd);
-  }
-}
-function readSlice(path, end, bytes) {
-  const fd = openSync(path, "r");
-  try {
-    const size = fstatSync(fd).size;
-    const length = Math.min(bytes, size);
-    const buffer = Buffer.alloc(length);
-    const read = readSync(fd, buffer, 0, length, end === "tail" ? size - length : 0);
-    return buffer.toString("utf8", 0, read);
-  } finally {
-    closeSync(fd);
-  }
-}
-function lastAntigravityModelIn(text2) {
-  const regex = /`Model Selection` (?:from [^\n`]+ )?to ([^\n`]+?)(?:\.\s|\.\n|\.\\n|\.?<\/|\.?$)/g;
-  let last = null;
-  for (const match of text2.matchAll(regex)) {
-    let val = match[1]?.trim();
-    if (val) {
-      val = val.replace(/\.?(\\n|\n)?$/, "").replace(/\.$/, "").trim();
-      if (val && !val.startsWith("<")) last = val;
-    }
-  }
-  return last;
-}
-function defaultAntigravityModel(agyHome) {
-  for (const dir of [agyHome, join2(agyHome, "..")]) {
-    const settings = join2(dir, "settings.json");
-    if (!existsSync2(settings)) continue;
-    try {
-      const raw = JSON.parse(readFileSync(settings, "utf8").replace(/^\uFEFF/, ""));
-      if (raw && typeof raw === "object" && "model" in raw && typeof raw.model === "string" && raw.model.trim()) {
-        return raw.model.trim();
-      }
-    } catch {
-    }
-  }
-  return null;
-}
-function newestAntigravityConversation(agyHome, worktreePath) {
-  const history = join2(agyHome, "history.jsonl");
-  if (!existsSync2(history)) return null;
-  const wanted = normalizePath(worktreePath);
-  const fd = openSync(history, "r");
-  try {
-    const size = fstatSync(fd).size;
-    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
-    let position = Math.max(0, size - buffer.length);
-    while (position >= 0) {
-      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
-      const lines = buffer.toString("utf8", 0, read).split("\n");
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i]?.trim();
-        if (!line) continue;
-        try {
-          const entry = JSON.parse(line);
-          if (entry && typeof entry === "object" && "workspace" in entry && typeof entry.workspace === "string") {
-            if (samePath(normalizePath(entry.workspace), wanted) && "conversationId" in entry && typeof entry.conversationId === "string") {
-              return entry.conversationId;
-            }
-          }
-        } catch {
-        }
-      }
-      if (position === 0) break;
-      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
-    }
-  } finally {
-    closeSync(fd);
-  }
-  return null;
-}
-function newestAntigravityModel(agyHome, worktreePath) {
-  if (!existsSync2(agyHome)) return null;
-  const conversationId = newestAntigravityConversation(agyHome, worktreePath);
-  if (conversationId) {
-    const transcript = join2(agyHome, "brain", conversationId, ".system_generated", "logs", "transcript.jsonl");
-    if (existsSync2(transcript)) {
-      const fromTranscript = readLastModel(transcript, lastAntigravityModelIn);
-      if (fromTranscript) return fromTranscript;
-    }
-  }
-  return defaultAntigravityModel(agyHome);
-}
-
 // src/orca-reader.ts
 var ORCA_TIMEOUT_MS = 1e4;
 var ORCA_COMMAND = process.platform === "win32" ? "orca.exe" : "orca";
@@ -866,7 +1134,7 @@ ${diagnostics.join("\n")}`;
     );
   });
 }
-async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoUrl) {
+async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoUrl, findModel = findAgentModel) {
   const worktrees = parseWorktreePs(await runWorktreePs());
   const active = selectActiveWorktree(worktrees);
   if (!active) {
@@ -878,7 +1146,7 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoU
     projectName: projectNameFor(active),
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
-    model: findAgentModel(agentType, typeof active.path === "string" ? active.path : null),
+    model: findModel(agentType, typeof active.path === "string" ? active.path : null),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
@@ -936,143 +1204,99 @@ function readRepoUrl(directory, signal) {
   });
 }
 
-// src/agent-art.ts
-var BRANCH_ART_KEY = "git-branch";
-var AGENT_ART_KEYS = {
-  claude: "claude",
-  "claude-agent-teams": "claude",
-  codex: "codex",
-  opencode: "opencode",
-  opencode2: "opencode",
-  omp: "omp",
-  "command-code": "commandcode",
-  dsh: "deepsek-harnnes",
-  grok: "grock",
-  hermes: "hermes",
-  antigravity: "agy",
-  agy: "agy"
+// config/presence-format.json
+var presence_format_default = {
+  brand: "Orca",
+  noAgentTitle: "Using Orca",
+  folderPrefix: "\u{1F4C1} ",
+  separator: " \xB7 ",
+  othersMarker: "+",
+  agentsWord: "agents",
+  working: "Working",
+  idle: "Idle",
+  privateProject: "Private Project",
+  repositoryButton: "View Repository",
+  branchFallback: "Branch"
 };
-var AGENT_ICON_DOMAINS = {
-  claude: "claude.ai",
-  "claude-agent-teams": "claude.ai",
-  codex: "openai.com",
-  opencode: "opencode.ai",
-  opencode2: "opencode.ai",
-  "command-code": "commandcode.ai",
-  dsh: "deepseek.com",
-  grok: "x.ai",
-  hermes: "hermes.nousresearch.com",
-  antigravity: "antigravity.google",
-  agy: "antigravity.google",
-  cursor: "cursor.com",
-  gemini: "gemini.google.com",
-  copilot: "github.com",
-  amp: "ampcode.com",
-  aider: "aider.chat",
-  goose: "block.github.io",
-  devin: "devin.ai",
-  kimi: "kimi.moonshot.cn"
-};
-var FAVICON = (domain, size) => `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
-var BRANCH_ICON_URL = FAVICON("git-scm.com", 128);
-function agentArtKey(agentType) {
-  return AGENT_ART_KEYS[agentType] ?? null;
-}
-function agentFaviconUrl(agentType) {
-  if (agentType === "omp") {
-    return "https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png";
-  }
-  const domain = AGENT_ICON_DOMAINS[agentType];
-  return domain ? FAVICON(domain, 256) : null;
-}
 
-// src/presence.ts
-var PRESENCE_ASSET_KEY = "orca";
-var KNOWN_AGENT_LABELS = {
-  "claude-agent-teams": "Claude",
-  opencode: "OpenCode",
-  opencode2: "OpenCode",
-  omp: "Oh My Pi",
-  "qwen-code": "Qwen Code"
-};
+// src/presence-format.ts
+var FORMAT = presence_format_default;
 var FIELD_LIMIT = 128;
-var PROJECT_LIMIT = 100;
+var FOLDER_LIMIT = 100;
 var FIELD_MIN = 2;
+var graphemes = new Intl.Segmenter(void 0, { granularity: "grapheme" });
+function normalizeText(value) {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+function clip(value, limit) {
+  if (value.length <= limit) return value;
+  let kept = "";
+  for (const { segment } of graphemes.segment(value)) {
+    if (kept.length + segment.length > limit) break;
+    kept += segment;
+  }
+  return kept;
+}
 function field(value) {
   return value.length >= FIELD_MIN ? value : "";
 }
-function normalizeName(value) {
-  return value.replace(/\s+/g, " ").trim();
-}
-function agentDisplayName(agentType) {
-  const known = KNOWN_AGENT_LABELS[agentType];
-  if (known) {
-    return known;
-  }
-  return agentType.split(/[-_\s]+/).filter((part) => part.length > 0).map((part) => (part[0] ?? "").toUpperCase() + part.slice(1)).join(" ");
-}
-function agentImageUrl(agentType, useUploadedArt) {
-  if (useUploadedArt) {
-    const key = agentArtKey(agentType);
-    if (key !== null) {
-      return key;
-    }
-  }
-  return agentFaviconUrl(agentType);
-}
-function buildActivity(input) {
-  const project = field(
-    input.projectName ? normalizeName(input.projectName).slice(0, PROJECT_LIMIT) : ""
-  );
-  const count = Math.max(0, Math.trunc(input.runningAgentCount));
-  const uploaded = input.useUploadedArt === true;
-  const branchText = input.branchName ? normalizeName(input.branchName).slice(0, 128) : "Branch";
-  const branchArt = uploaded ? { smallImageKey: BRANCH_ART_KEY, smallImageText: branchText } : { smallImageUrl: BRANCH_ICON_URL, smallImageText: branchText };
-  if (input.agentType === null) {
-    const state = composeStateLine(project, count);
+function composeText(input) {
+  const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0;
+  const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName));
+  const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, FOLDER_LIMIT) : "";
+  if (input.agentName === null) {
+    const agents = `${count} ${FORMAT.agentsWord}`;
+    const others = count > 1 ? `${FORMAT.separator}${agents}` : "";
     return {
-      details: "Using Orca",
-      // Why a fallback: an empty state simply hides line 2, which beats a rejected update.
-      state: state.length >= FIELD_MIN ? state : "Orca",
+      details: FORMAT.noAgentTitle,
+      state: folderLine ? `${folderLine}${others}` : count > 1 ? agents : FORMAT.brand,
+      iconText: ""
+    };
+  }
+  const status = input.agentActive === false ? FORMAT.idle : FORMAT.working;
+  const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT));
+  const suffix = `${count > 1 ? ` ${FORMAT.othersMarker}${count - 1}` : ""}${FORMAT.separator}${status}`;
+  return {
+    details: agent ? `${clip(agent, FIELD_LIMIT - suffix.length)}${suffix}` : "",
+    state: folderLine || status,
+    iconText: field(clip(normalizeText(input.model), FIELD_LIMIT)) || agent
+  };
+}
+
+// src/presence.ts
+function buildActivity(input) {
+  const registry = input.registry ?? builtinRegistry;
+  const uploaded = input.useUploadedArt === true;
+  const agent = input.agentType === null ? null : registry.resolve(input.agentType);
+  const text = composeText({
+    projectName: input.projectName,
+    agentName: agent?.name ?? null,
+    runningAgentCount: input.runningAgentCount,
+    ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
+    ...input.model !== void 0 ? { model: input.model } : {},
+    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
+  });
+  const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback;
+  const branchArt = uploaded ? { smallImageKey: registry.branchIcon.asset, smallImageText: branchText } : { smallImageUrl: registry.branchIcon.imageUrl, smallImageText: branchText };
+  if (agent === null) {
+    return {
+      details: text.details,
+      state: text.state,
       startTimestamp: input.startedAt,
-      largeImageKey: PRESENCE_ASSET_KEY,
-      largeImageText: "Orca",
+      largeImageKey: registry.fallbackIcon.asset,
+      largeImageText: FORMAT.brand,
       ...branchArt
     };
   }
-  const agent = agentDisplayName(input.agentType);
-  const image = agentImageUrl(input.agentType, uploaded);
-  const iconText = field(input.model?.slice(0, FIELD_LIMIT) ?? "") || "Agent";
-  const agentArt = uploaded ? { largeImageKey: image ?? PRESENCE_ASSET_KEY, largeImageText: iconText } : image !== null ? { largeImageUrl: image, largeImageText: iconText } : { largeImageKey: PRESENCE_ASSET_KEY, largeImageText: iconText };
+  const image = (uploaded ? agent.asset : null) ?? agent.imageUrl;
+  const agentArt = uploaded ? { largeImageKey: image ?? registry.fallbackIcon.asset, largeImageText: text.iconText } : image !== null ? { largeImageUrl: image, largeImageText: text.iconText } : { largeImageKey: registry.fallbackIcon.asset, largeImageText: text.iconText };
   return {
-    details: field(withOtherAgents(agent, input.runningAgentCount)),
-    // Why the status and not a count: "+N" on line 1 already says how many agents are open.
-    state: composeAgentStateLine(project, input.agentActive !== false),
+    details: text.details,
+    state: text.state,
     startTimestamp: input.startedAt,
     ...agentArt,
     ...branchArt
   };
-}
-function withOtherAgents(agent, runningAgentCount2) {
-  const others = Math.max(0, Math.trunc(runningAgentCount2)) - 1;
-  return others > 0 ? `${agent} +${others}` : agent;
-}
-function composeAgentStateLine(project, active) {
-  const status = active ? "Working" : "Idle";
-  if (project.length === 0) {
-    return status;
-  }
-  const suffix = ` \xB7 ${status}`;
-  const room = Math.max(0, FIELD_LIMIT - suffix.length);
-  return `${project.slice(0, room)}${suffix}`;
-}
-function composeStateLine(project, count) {
-  const suffix = count > 1 ? ` \xB7 ${count} agents` : "";
-  if (project.length === 0) {
-    return count > 1 ? `${count} agents` : "";
-  }
-  const room = Math.max(0, FIELD_LIMIT - suffix.length);
-  return `${project.slice(0, room)}${suffix}`;
 }
 
 // src/presence-controller.ts
@@ -1198,10 +1422,15 @@ async function isOrcaRunning(options = {}) {
 function createPresenceRuntime(options) {
   const log = options.log ?? (() => {
   });
+  const registry = options.registry ?? builtinRegistry;
   const discord = options.deps ? null : createDiscordPresence(options.clientId);
   const deps = options.deps ?? {
     isOrcaRunning,
-    readState: readPresenceState,
+    readState: () => readPresenceState(
+      void 0,
+      void 0,
+      (agentType, path) => findAgentModel(agentType, path, void 0, registry)
+    ),
     apply: (activity) => discord.apply(activity),
     clear: () => discord.clear(),
     connectionGeneration: () => discord.connectionGeneration(),
@@ -1274,7 +1503,7 @@ function createPresenceRuntime(options) {
       clear: () => deps.clear(),
       connectionEpoch: deps.connectionGeneration,
       useUploadedArt: options.useUploadedArt,
-      buildActivity: options.buildActivity
+      buildActivity: options.buildActivity ?? ((input) => buildActivity({ ...input, registry }))
     });
   };
   return {
@@ -1318,44 +1547,35 @@ function createPresenceRuntime(options) {
 }
 
 // src/plugin-presence.ts
-function truncate(value, limit) {
-  return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, "");
-}
-function text(value, limit = 128) {
-  const normalized = truncate(value?.replace(/\s+/g, " ").trim() ?? "", limit);
-  return normalized.length >= 2 ? normalized : "";
-}
 function buildPluginActivity(input) {
+  const registry = input.registry ?? builtinRegistry;
   const uploaded = input.useUploadedArt === true;
-  const folder = text(input.incognito ? "Private Project" : input.projectName);
-  const project = folder ? truncate(/^folder:/i.test(folder) ? folder : `Folder: ${folder}`, 100) : "";
-  const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0;
-  const status = input.agentActive === false ? "Idle" : "Working";
+  const agent = input.agentType === null ? null : registry.resolve(input.agentType);
+  const text = composeText({
+    projectName: input.projectName,
+    agentName: agent?.name ?? null,
+    runningAgentCount: input.runningAgentCount,
+    ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
+    ...input.model !== void 0 ? { model: input.model } : {},
+    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
+  });
   const activity = {
-    details: "Using Orca",
-    state: project || "Orca",
+    details: text.details,
+    state: text.state,
     startTimestamp: input.startedAt,
-    largeImageText: "Orca",
-    ...uploaded ? { largeImageKey: PRESENCE_ASSET_KEY } : {}
+    largeImageText: FORMAT.brand,
+    ...uploaded ? { largeImageKey: registry.fallbackIcon.asset } : {}
   };
-  if (input.agentType !== null) {
-    const agent = text(agentDisplayName(input.agentType));
-    const suffix = `${count > 1 ? ` +${count - 1}` : ""} \xB7 ${status}`;
-    activity.details = agent ? `Agent: ${truncate(agent, 128 - 7 - suffix.length)}${suffix}` : "";
-    activity.state = project || status;
-    const key = uploaded ? agentArtKey(input.agentType) : null;
-    const url = key ? null : agentFaviconUrl(input.agentType);
-    if (key || url) {
-      if (key) activity.smallImageKey = key;
-      else if (url) activity.smallImageUrl = url;
-      activity.smallImageText = text(input.model) || text(`Agent: ${agent}`);
-    }
-  } else if (count > 1) {
-    activity.state = project ? text(`${project} \xB7 ${count} agents`) : `${count} agents`;
+  if (agent !== null) {
+    if (uploaded && agent.asset) activity.smallImageKey = agent.asset;
+    else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl;
+    else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset;
+    else activity.smallImageUrl = registry.fallbackIcon.imageUrl;
+    activity.smallImageText = text.iconText;
   }
   if (!input.incognito) {
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl);
-    if (repoUrl) activity.buttons = [{ label: "View Repository", url: repoUrl }];
+    if (repoUrl) activity.buttons = [{ label: FORMAT.repositoryButton, url: repoUrl }];
   }
   return activity;
 }
@@ -1402,14 +1622,14 @@ function createPluginSession(options) {
   const runtime = createPresenceRuntime({
     ...options.config,
     log: options.log,
-    buildActivity: (input) => buildPluginActivity({ ...input, incognito }),
+    buildActivity: (input) => buildPluginActivity({ ...input, incognito, ...options.registry ? { registry: options.registry } : {} }),
     deps: {
       isOrcaRunning: async () => true,
       readState: async () => {
         try {
           const state = await options.readState();
           readError = null;
-          return state && incognito ? { ...state, projectName: "Private Project", branchName: null, repoUrl: null } : state;
+          return state && incognito ? { ...state, projectName: FORMAT.privateProject, branchName: null, repoUrl: null } : state;
         } catch (error2) {
           readError = error2 instanceof Error ? error2.message : String(error2);
           report(error2);
@@ -1489,14 +1709,6 @@ function createPluginSession(options) {
 }
 
 // src/orca-plugin.ts
-function readLegacyConfig(path) {
-  try {
-    const value = JSON.parse(readFileSync2(path, "utf8").replace(/^\uFEFF/, ""));
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
 function createPluginLifecycle(orca, legacy, startSession) {
   const readerAbort = new AbortController();
   const report = (error2) => orca.log(error2 instanceof Error ? error2.message : String(error2));
@@ -1564,11 +1776,11 @@ function createPluginLifecycle(orca, legacy, startSession) {
         if (enabled != null && typeof enabled !== "boolean") throw new Error("Enabled setting must be boolean");
         const current = startSession(enabled !== false, incognito, readerAbort.signal, (status) => {
           if (stopping) return;
-          const text2 = status.paused ? "RPC paused" : status.discordConnected ? "RPC" : "RPC waiting";
+          const text = status.paused ? "RPC paused" : status.discordConnected ? "RPC" : "RPC waiting";
           const tooltip = status.paused ? "Discord Rich Presence paused: click to resume" : status.lastError ?? "Discord Rich Presence: click to pause or resume";
           void orca.host.call("statusBar.update", {
             id: "presence",
-            text: text2,
+            text,
             tooltip
           }).catch(report);
         });
@@ -1603,21 +1815,25 @@ function createPluginLifecycle(orca, legacy, startSession) {
 }
 var lifecycle = null;
 async function activate(orca) {
-  const legacy = readLegacyConfig(configPath());
+  const log = (message) => orca.log(message);
+  const legacy = readConfigFile(configPath(), log);
   const config = loadConfig({ env: {}, readConfigFile: () => legacy });
+  const registry = createAgentRegistry({ overrides: config.agents, log });
   const cliEntry = resolveBundledCliEntry(process.execPath, process.platform);
   const uid = process.getuid?.();
   const runtimeDirectory = process.platform === "linux" ? process.env.XDG_RUNTIME_DIR || (uid === void 0 ? void 0 : `/run/user/${uid}`) : void 0;
   const paths = pluginDiscordPaths(process.platform, tmpdir2(), runtimeDirectory);
   const current = createPluginLifecycle(orca, legacy, (enabled, incognito, signal, onStatus) => createPluginSession({
     config,
+    registry,
     enabled,
     incognito,
     onStatus,
-    log: (message) => orca.log(message),
+    log,
     readState: () => readPresenceState(
       () => runOrcaWorktreePs(process.execPath, cliEntry, signal),
-      (path) => readRepoUrl(path, signal)
+      (path) => readRepoUrl(path, signal),
+      (agentType, path) => findAgentModel(agentType, path, void 0, registry)
     ),
     transport: createDiscordPresence(config.clientId, (clientId) => createDiscordIpcClient(clientId, paths))
   }));
@@ -1632,6 +1848,5 @@ async function deactivate() {
 export {
   createPluginLifecycle,
   deactivate,
-  activate as default,
-  readLegacyConfig
+  activate as default
 };

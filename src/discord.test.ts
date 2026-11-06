@@ -259,7 +259,7 @@ it('reuses the live socket after an acknowledged clear while showing no activity
   assert.equal(await presence.apply(activity), true)
   assert.equal(await presence.clear(), true)
   assert.equal(presence.isConnected(), false)
-  assert.equal(await presence.apply({ ...activity, state: 'Private Project' }), true)
+  assert.equal(await presence.apply({ ...activity, state: '📁 Private Project' }), true)
   assert.equal(created, 1)
   assert.equal(fake.destroyed(), 0)
   assert.equal(presence.isConnected(), true)

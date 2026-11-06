@@ -6,6 +6,7 @@
     "moduleResolution": "NodeNext",
     "types": ["node"],
     "strict": true,
+    "resolveJsonModule": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,

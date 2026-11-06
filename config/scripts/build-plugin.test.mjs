@@ -27,6 +27,12 @@ it('builds a worker that imports outside the repo without node_modules', async (
       cwd: directory, encoding: 'utf8', windowsHide: true
     })
     assert.equal(output.trim(), 'worker import ok')
-    assert.doesNotMatch(readFileSync(bundle, 'utf8'), /[ \t]+\r?$/m)
+    const text = readFileSync(bundle, 'utf8')
+    assert.doesNotMatch(text, /[ \t]+\r?$/m)
+    // The registry and the text format are compiled in: no runtime read of the JSON files.
+    assert.match(text, /"Oh My Pi"/)
+    assert.match(text, /noAgentTitle/)
+    assert.doesNotMatch(text, /readFileSync\([^)]*(agents|presence-format)\.json/)
+    assert.ok(Buffer.byteLength(text) < 100 * 1024, 'bundle must stay small')
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })

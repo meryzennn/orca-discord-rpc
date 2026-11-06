@@ -1,47 +1,36 @@
-import { agentDisplayName, PRESENCE_ASSET_KEY, type PresenceActivity, type PresenceInput } from './presence.ts'
-import { agentArtKey, agentFaviconUrl } from './agent-art.ts'
+import { builtinRegistry } from './agent-registry.ts'
 import { sanitizeRepoWebUrl } from './git-remote.ts'
+import { composeText, FORMAT } from './presence-format.ts'
+import type { PresenceActivity, PresenceInput } from './presence.ts'
 
-function truncate(value: string, limit: number): string {
-  return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, '')
-}
-
-function text(value: string | null | undefined, limit = 128): string {
-  const normalized = truncate(value?.replace(/\s+/g, ' ').trim() ?? '', limit)
-  return normalized.length >= 2 ? normalized : ''
-}
-
-export function buildPluginActivity(input: PresenceInput & { incognito?: boolean }): PresenceActivity {
+/** The plugin layout: Orca on the large icon and the featured agent on the small one. */
+export function buildPluginActivity(input: PresenceInput): PresenceActivity {
+  const registry = input.registry ?? builtinRegistry
   const uploaded = input.useUploadedArt === true
-  const folder = text(input.incognito ? 'Private Project' : input.projectName)
-  const project = folder ? truncate(/^folder:/i.test(folder) ? folder : `Folder: ${folder}`, 100) : ''
-  const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0
-  const status = input.agentActive === false ? 'Idle' : 'Working'
+  const agent = input.agentType === null ? null : registry.resolve(input.agentType)
+  const text = composeText({
+    projectName: input.projectName,
+    agentName: agent?.name ?? null,
+    runningAgentCount: input.runningAgentCount,
+    ...(input.incognito !== undefined ? { incognito: input.incognito } : {}),
+    ...(input.model !== undefined ? { model: input.model } : {}),
+    ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
+  })
   const activity: PresenceActivity = {
-    details: 'Using Orca', state: project || 'Orca', startTimestamp: input.startedAt,
-    largeImageText: 'Orca', ...(uploaded ? { largeImageKey: PRESENCE_ASSET_KEY } : {})
+    details: text.details, state: text.state, startTimestamp: input.startedAt,
+    largeImageText: FORMAT.brand, ...(uploaded ? { largeImageKey: registry.fallbackIcon.asset } : {})
   }
-  if (input.agentType !== null) {
-    const agent = text(agentDisplayName(input.agentType))
-    const suffix = `${count > 1 ? ` +${count - 1}` : ''} · ${status}`
-    activity.details = agent ? `Agent: ${truncate(agent, 128 - 7 - suffix.length)}${suffix}` : ''
-    activity.state = project || status
-    const key = uploaded ? agentArtKey(input.agentType) : null
-    const url = key ? null : agentFaviconUrl(input.agentType)
-    if (key || url) {
-      if (key) activity.smallImageKey = key
-      else if (url) activity.smallImageUrl = url
-      activity.smallImageText = text(input.model) || text(`Agent: ${agent}`)
-    }
-  } else if (count > 1) {
-    activity.state = project ? text(`${project} · ${count} agents`) : `${count} agents`
+  if (agent !== null) {
+    // An agent with no artwork of its own gets the fallback icon rather than an empty slot.
+    if (uploaded && agent.asset) activity.smallImageKey = agent.asset
+    else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl
+    else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset
+    else activity.smallImageUrl = registry.fallbackIcon.imageUrl
+    activity.smallImageText = text.iconText
   }
   if (!input.incognito) {
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl)
-    if (repoUrl) activity.buttons = [{ label: 'View Repository', url: repoUrl }]
+    if (repoUrl) activity.buttons = [{ label: FORMAT.repositoryButton, url: repoUrl }]
   }
   return activity
 }
-
-export const buildTrayActivity = buildPluginActivity
-

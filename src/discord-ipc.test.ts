@@ -51,7 +51,7 @@ async function peer(handle: (opcode: number, message: Message, socket: Socket) =
   } }
 }
 const paths = (path: string) => [{ platform: [process.platform], format: () => path }]
-const activity = { details: 'Agent: Codex · Working', state: 'Folder: sample',
+const activity = { details: 'Codex · Working', state: '📁 sample',
   startTimestamp: new Date('2026-11-07T00:00:00Z'), largeImageKey: 'orca', largeImageText: 'Orca',
   smallImageUrl: 'https://example.com/codex.png', smallImageText: 'GPT-6.1 Sol',
   buttons: [{ label: 'View Repository', url: 'https://github.com/owner/repo' }] }
@@ -77,8 +77,24 @@ it('handshakes and preserves activity assets, model, buttons, millisecond timer 
     assert.equal(await presence.clear(), true)
     assert.equal(received.at(-1)?.args?.activity, null)
     assert.equal(presence.isConnected(), false)
-    assert.equal(await presence.apply({ ...activity, state: 'Folder: Private Project', buttons: undefined }), true)
+    assert.equal(await presence.apply({ ...activity, state: '📁 Private Project', buttons: undefined }), true)
     assert.equal(received.filter(message => message.client_id).length, 1)
+  } finally { await presence.destroy(); await server.close() }
+})
+
+it('counts UTF-8 bytes in the frame header so emoji and CJK text arrive intact', async () => {
+  const received: Message[] = []
+  const server = await peer((opcode, message, socket) => {
+    received.push(message)
+    socket.write(opcode === 0 ? ready() : frame(1, { cmd: 'SET_ACTIVITY', nonce: message.nonce, data: {} }))
+  })
+  const client = createDiscordIpcClient('123', paths(server.path))
+  const presence = createDiscordPresence('123', () => client)
+  const state = '📁 日本語-👨‍👩‍👧-🇯🇵'
+  try {
+    assert.equal(await presence.apply({ ...activity, state }), true)
+    assert.equal(received[1]?.args?.activity?.state, state)
+    assert.ok(Buffer.byteLength(state, 'utf8') > state.length)
   } finally { await presence.destroy(); await server.close() }
 })
 

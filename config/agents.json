@@ -1,0 +1,102 @@
+{
+  "fallback": {
+    "asset": "orca",
+    "imageUrl": "https://www.google.com/s2/favicons?domain=onorca.dev&sz=256"
+  },
+  "branchIcon": {
+    "asset": "git-branch",
+    "imageUrl": "https://www.google.com/s2/favicons?domain=git-scm.com&sz=128"
+  },
+  "agents": {
+    "claude": {
+      "name": "Claude",
+      "asset": "claude",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      "modelResolver": "claude"
+    },
+    "claude-agent-teams": {
+      "name": "Claude",
+      "asset": "claude",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      "modelResolver": "claude"
+    },
+    "codex": {
+      "name": "Codex",
+      "asset": "codex",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=openai.com&sz=256",
+      "modelResolver": "codex"
+    },
+    "omp": {
+      "name": "Oh My Pi",
+      "asset": "omp",
+      "imageUrl": "https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png",
+      "modelResolver": "omp"
+    },
+    "antigravity": {
+      "name": "Antigravity",
+      "asset": "agy",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=antigravity.google&sz=256",
+      "modelResolver": "antigravity"
+    },
+    "agy": {
+      "name": "Antigravity",
+      "asset": "agy",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=antigravity.google&sz=256",
+      "modelResolver": "antigravity"
+    },
+    "opencode": {
+      "name": "OpenCode",
+      "asset": "opencode",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=opencode.ai&sz=256"
+    },
+    "opencode2": {
+      "name": "OpenCode",
+      "asset": "opencode",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=opencode.ai&sz=256"
+    },
+    "command-code": {
+      "name": "Command Code",
+      "asset": "commandcode",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=commandcode.ai&sz=256"
+    },
+    "dsh": {
+      "asset": "deepsek-harnnes",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=deepseek.com&sz=256"
+    },
+    "grok": {
+      "asset": "grock",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=x.ai&sz=256"
+    },
+    "hermes": {
+      "asset": "hermes",
+      "imageUrl": "https://www.google.com/s2/favicons?domain=hermes.nousresearch.com&sz=256"
+    },
+    "cursor": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=cursor.com&sz=256"
+    },
+    "gemini": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=256"
+    },
+    "copilot": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=github.com&sz=256"
+    },
+    "amp": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=ampcode.com&sz=256"
+    },
+    "aider": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=aider.chat&sz=256"
+    },
+    "goose": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=block.github.io&sz=256"
+    },
+    "devin": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=devin.ai&sz=256"
+    },
+    "kimi": {
+      "imageUrl": "https://www.google.com/s2/favicons?domain=kimi.moonshot.cn&sz=256"
+    },
+    "qwen-code": {
+      "name": "Qwen Code"
+    }
+  }
+}

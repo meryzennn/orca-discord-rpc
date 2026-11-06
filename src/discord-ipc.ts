@@ -74,7 +74,8 @@ export function createDiscordIpcClient(clientId: string, paths: readonly SocketP
   const send = (opcode: number, payload: unknown): void => {
     if (ended || !socket) return
     try {
-      const body = Buffer.from(JSON.stringify(payload))
+      // Why UTF-8 spelled out: the frame header counts bytes, and an emoji takes up to 4 per character.
+      const body = Buffer.from(JSON.stringify(payload), 'utf8')
       if (body.length > MAX_FRAME_BYTES) { stop(error('FRAME_TOO_LARGE')); return }
       const header = Buffer.alloc(8)
       header.writeUInt32LE(opcode, 0); header.writeUInt32LE(body.length, 4)

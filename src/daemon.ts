@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { loadConfig, type ConfigFile } from './config.ts'
+import { createAgentRegistry } from './agent-registry.ts'
+import { loadConfig, readConfigFile } from './config.ts'
 import { createPresenceRuntime } from './runtime.ts'
 import { configPath, logPath, pidPath } from './paths.ts'
 
@@ -28,16 +29,8 @@ function existingLogSize(target: string): number {
   }
 }
 
-function readConfigFile(): ConfigFile | null {
-  try {
-    return JSON.parse(readFileSync(configPath(), 'utf8')) as ConfigFile
-  } catch {
-    return null
-  }
-}
-
 async function main(): Promise<void> {
-  const config = loadConfig({ readConfigFile })
+  const config = loadConfig({ readConfigFile: () => readConfigFile(configPath(), log) })
   if (config.clientId.length === 0) {
     log('no Discord client id configured; set ORCA_DISCORD_CLIENT_ID or config.json. Exiting.')
     process.exitCode = 1
@@ -52,6 +45,7 @@ async function main(): Promise<void> {
     clientId: config.clientId,
     pollMs: config.pollMs,
     useUploadedArt: config.useUploadedArt,
+    registry: createAgentRegistry({ overrides: config.agents, log }),
     log
   })
 

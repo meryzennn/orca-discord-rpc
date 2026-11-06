@@ -1,49 +1,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildActivity, agentDisplayName, agentImageUrl, PRESENCE_ASSET_KEY } from './presence.ts'
-import { BRANCH_ART_KEY, BRANCH_ICON_URL, agentFaviconUrl } from './agent-art.ts'
+import { buildActivity } from './presence.ts'
 
 const startedAt = new Date('2026-10-05T00:00:00.000Z')
+const OMP_LOGO = 'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png'
+const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=256'
+const BRANCH_FAVICON = 'https://www.google.com/s2/favicons?domain=git-scm.com&sz=128'
 
-describe('agentDisplayName', () => {
-  it('keeps known brand spellings', () => {
-    assert.equal(agentDisplayName('claude'), 'Claude')
-    assert.equal(agentDisplayName('opencode'), 'OpenCode')
-  })
-
-  it('title-cases an unknown agent slug', () => {
-    assert.equal(agentDisplayName('some-in-house-agent'), 'Some In House Agent')
-  })
-})
-
-describe('agentImageUrl', () => {
-  it('uses the uploaded asset key when artwork was uploaded', () => {
-    assert.equal(agentImageUrl('claude', true), 'claude')
-    assert.equal(agentImageUrl('antigravity', true), 'agy')
-  })
-
-  it('falls back to a public favicon when nothing is uploaded', () => {
-    assert.equal(agentImageUrl('claude', false), agentFaviconUrl('claude'))
-    assert.ok(agentImageUrl('claude', false)?.startsWith('https://'))
-  })
-
-  it('uses a favicon for an agent with no uploaded asset even in uploaded mode', () => {
-    assert.equal(agentImageUrl('cursor', true), agentFaviconUrl('cursor'))
-  })
-
-  it('returns null for an unknown agent', () => {
-    assert.equal(agentImageUrl('some-in-house-agent', false), null)
-  })
-})
-
-describe('buildActivity', () => {
+describe('buildActivity (daemon layout)', () => {
   it('shows Orca alone when nothing is running', () => {
-    const activity = buildActivity({
-      projectName: null,
-      agentType: null,
-      runningAgentCount: 0,
-      startedAt
-    })
+    const activity = buildActivity({ projectName: null, agentType: null, runningAgentCount: 0, startedAt })
     assert.equal(activity.details, 'Using Orca')
     assert.equal(activity.state, 'Orca')
     assert.equal(activity.startTimestamp, startedAt)
@@ -51,275 +17,110 @@ describe('buildActivity', () => {
     assert.equal(activity.largeImageUrl, undefined)
   })
 
-  it('names the agent on the first line when one is running', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.details, 'Claude')
-    assert.equal(activity.state, 'orca · Working')
+  it('keeps the folder and counts agents when no agent is featured', () => {
+    const activity = buildActivity({ projectName: 'orca', agentType: null, runningAgentCount: 0, agentActive: false, startedAt })
+    assert.equal(activity.details, 'Using Orca')
+    assert.equal(activity.state, '📁 orca')
   })
 
-  it('names the model on the agent icon when it is known', () => {
+  it('names the agent and its status on line 1 and the folder on line 2', () => {
+    const activity = buildActivity({ projectName: 'orca', agentType: 'claude', runningAgentCount: 1, agentActive: true, startedAt })
+    assert.equal(activity.details, 'Claude · Working')
+    assert.equal(activity.state, '📁 orca')
+  })
+
+  it('counts every open pane, not each distinct type', () => {
+    const base = { projectName: 'orca', agentType: 'claude', agentActive: true, startedAt }
+    assert.equal(buildActivity({ ...base, runningAgentCount: 1 }).details, 'Claude · Working')
+    assert.equal(buildActivity({ ...base, runningAgentCount: 2 }).details, 'Claude +1 · Working')
+    assert.equal(buildActivity({ ...base, runningAgentCount: 3 }).details, 'Claude +2 · Working')
+  })
+
+  it('keeps status on line 1 when the agent is between turns', () => {
+    const activity = buildActivity({ projectName: 'orca', agentType: 'codex', runningAgentCount: 2, agentActive: false, startedAt })
+    assert.equal(activity.details, 'Codex +1 · Idle')
+    assert.equal(activity.state, '📁 orca')
+  })
+
+  it('replaces the folder and hides the branch in Incognito', () => {
+    const activity = buildActivity({ projectName: 'secret', agentType: 'claude', runningAgentCount: 1,
+      branchName: 'secret-branch', incognito: true, startedAt })
+    assert.equal(activity.state, '📁 Private Project')
+    assert.ok(!JSON.stringify(activity).includes('secret'))
+  })
+
+  it('names the model on the agent icon, else the agent', () => {
     const base = { projectName: 'orca', agentType: 'claude', runningAgentCount: 1, startedAt }
     assert.equal(buildActivity({ ...base, model: 'Claude Opus 5.5' }).largeImageText, 'Claude Opus 5.5')
-    assert.equal(buildActivity(base).largeImageText, 'Agent')
+    assert.equal(buildActivity(base).largeImageText, 'Claude')
   })
 
-  it('appends +N when other agents are open, like Codex +1', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'codex',
-      runningAgentCount: 2,
-      startedAt
-    })
-    assert.equal(activity.details, 'Codex +1')
-  })
-
-  it('does not append +N for a single agent', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'codex',
-      runningAgentCount: 1,
-      startedAt
-    })
-    assert.equal(activity.details, 'Codex')
-  })
-
-  it('counts each open agent, not each distinct type', () => {
-    // Why: two panes running Claude are still two agents the user has open.
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 3,
-      startedAt
-    })
-    assert.equal(activity.details, 'Claude +2')
-  })
-
-  it('shows the second line as the folder and the status, not a count', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 2,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.details, 'Claude +1')
-    assert.equal(activity.state, 'orca · Working')
-  })
-
-  it('uses the uploaded asset keys when artwork was uploaded', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      startedAt,
-      useUploadedArt: true
-    })
+  it('uses uploaded asset keys when artwork was uploaded', () => {
+    const activity = buildActivity({ projectName: 'orca', agentType: 'claude', runningAgentCount: 1, startedAt, useUploadedArt: true })
     assert.equal(activity.largeImageKey, 'claude')
     assert.equal(activity.largeImageUrl, undefined)
-    assert.equal(activity.smallImageKey, BRANCH_ART_KEY)
+    assert.equal(activity.smallImageKey, 'git-branch')
     assert.equal(activity.smallImageUrl, undefined)
   })
 
   it('uses public urls when nothing is uploaded', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      startedAt
-    })
-    assert.equal(activity.largeImageUrl, agentFaviconUrl('claude'))
-    assert.equal(activity.smallImageUrl, BRANCH_ICON_URL)
+    const activity = buildActivity({ projectName: 'orca', agentType: 'claude', runningAgentCount: 1, startedAt })
+    assert.equal(activity.largeImageUrl, CLAUDE_FAVICON)
+    assert.equal(activity.smallImageUrl, BRANCH_FAVICON)
     assert.equal(activity.largeImageKey, undefined)
   })
 
-  it('falls back to the Orca asset for an agent with no artwork', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'some-in-house-agent',
-      runningAgentCount: 1,
-      startedAt,
-      useUploadedArt: true
-    })
-    assert.equal(activity.details, 'Some In House Agent')
-    assert.equal(activity.largeImageKey, PRESENCE_ASSET_KEY)
+  it('uses a public image for an agent with no uploaded asset even in uploaded mode', () => {
+    const activity = buildActivity({ projectName: 'orca', agentType: 'cursor', runningAgentCount: 1, startedAt, useUploadedArt: true })
+    assert.equal(activity.largeImageKey, 'https://www.google.com/s2/favicons?domain=cursor.com&sz=256')
   })
 
-  it('falls back to the Orca asset when no agent is running', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: null,
-      runningAgentCount: 0,
-      startedAt
-    })
-    assert.equal(activity.details, 'Using Orca')
-    assert.equal(activity.largeImageKey, 'orca')
-    assert.equal(activity.smallImageUrl, BRANCH_ICON_URL)
+  it('falls back to the Orca asset and a generated name for an unknown agent', () => {
+    for (const useUploadedArt of [false, true]) {
+      const activity = buildActivity({ projectName: 'orca', agentType: 'some-in-house-agent', runningAgentCount: 1, startedAt, useUploadedArt })
+      assert.equal(activity.details, 'Some In House Agent · Working')
+      assert.equal(activity.largeImageKey, 'orca')
+      assert.equal(activity.largeImageText, 'Some In House Agent')
+    }
   })
 
-  it('shows Idle on the second line when the agent is between turns', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 0,
-      agentActive: false,
-      startedAt
-    })
-    assert.equal(activity.details, 'Claude')
-    assert.equal(activity.state, 'orca · Idle')
-  })
-
-  it('shows Working on the second line when the agent is mid-turn', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.state, 'orca · Working')
-  })
-
-  it('shows Working even while another agent is counted', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 2,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.state, 'orca · Working')
-  })
-
-  it('puts the branch name in the icon tooltip', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      agentActive: true,
-      branchName: 'feat/mobile-fix',
-      startedAt
-    })
-    assert.equal(activity.smallImageText, 'feat/mobile-fix')
-  })
-
-  it('falls back to a generic tooltip when no branch is known', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.smallImageText, 'Branch')
-  })
-
-  it('never shows Idle while the featured agent is running', () => {
-    // A running agent means the featured agent is active, so Idle cannot be shown.
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'claude',
-      runningAgentCount: 2,
-      agentActive: true,
-      startedAt
-    })
-    assert.equal(activity.state, 'orca · Working')
-  })
-
-  it('does not mark anything idle when no agent is known', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: null,
-      runningAgentCount: 0,
-      agentActive: false,
-      startedAt
-    })
-    assert.equal(activity.details, 'Using Orca')
-    assert.equal(activity.state, 'orca')
+  it('puts the branch name in the small icon tooltip, with a generic fallback', () => {
+    const base = { projectName: 'orca', agentType: 'claude', runningAgentCount: 1, startedAt }
+    assert.equal(buildActivity({ ...base, branchName: 'feat/mobile-fix' }).smallImageText, 'feat/mobile-fix')
+    assert.equal(buildActivity(base).smallImageText, 'Branch')
   })
 
   it('collapses whitespace and control characters in a project name', () => {
-    const activity = buildActivity({
-      projectName: 'my  project\n\ttwo',
-      agentType: null,
-      runningAgentCount: 0,
-      startedAt
-    })
-    assert.equal(activity.state, 'my project two')
-  })
-
-  it('keeps the composed state line within 128 characters', () => {
-    const activity = buildActivity({
-      projectName: 'x'.repeat(200),
-      agentType: 'claude',
-      runningAgentCount: 12,
-      startedAt
-    })
-    assert.ok(activity.state.length <= 128)
+    const activity = buildActivity({ projectName: 'my  project\n\ttwo', agentType: null, runningAgentCount: 0, startedAt })
+    assert.equal(activity.state, '📁 my project two')
   })
 
   it('omits a one-character project name instead of failing the whole update', () => {
-    // Discord rejects any field shorter than 2 characters, which fails the entire setActivity.
-    const activity = buildActivity({
-      projectName: 'x',
-      agentType: 'claude',
-      runningAgentCount: 1,
-      startedAt
-    })
-    assert.equal(activity.details, 'Claude')
-    // The project was dropped, so line 2 falls back to the status alone.
+    const activity = buildActivity({ projectName: 'x', agentType: 'claude', runningAgentCount: 1, startedAt })
     assert.equal(activity.state, 'Working')
   })
 
   it('omits a one-character agent name instead of failing the whole update', () => {
-    const activity = buildActivity({
-      projectName: 'orca',
-      agentType: 'q',
-      runningAgentCount: 1,
-      startedAt
-    })
+    const activity = buildActivity({ projectName: 'orca', agentType: 'q', runningAgentCount: 1, startedAt })
     assert.equal(activity.details, '')
-    assert.equal(activity.state, 'orca · Working')
+    assert.equal(activity.state, '📁 orca')
   })
 
   it('never emits a single-character field', () => {
-    const activity = buildActivity({
-      projectName: 'x',
-      agentType: 'q',
-      runningAgentCount: 1,
-      startedAt
-    })
+    const activity = buildActivity({ projectName: 'x', agentType: 'q', runningAgentCount: 1, startedAt })
     for (const value of [activity.details, activity.state, activity.largeImageText, activity.smallImageText]) {
-      if (value !== undefined) {
-        assert.ok(value.length === 0 || value.length >= 2, `too short: ${JSON.stringify(value)}`)
-      }
+      if (value !== undefined) assert.ok(value.length === 0 || value.length >= 2, `too short: ${JSON.stringify(value)}`)
     }
   })
-})
 
-describe('Oh My Pi presence', () => {
   for (const useUploadedArt of [false, true]) {
     it(`uses OMP artwork with useUploadedArt=${useUploadedArt}`, () => {
-      const logoUrl = 'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png'
-      const activity = buildActivity({
-        projectName: 'orca-discord-rpc',
-        agentType: 'omp',
-        runningAgentCount: 2,
-        agentActive: true,
-        branchName: 'main',
-        startedAt: new Date('2026-11-06T00:00:00Z'),
-        useUploadedArt
-      })
-
-      assert.equal(activity.details, 'Oh My Pi +1')
-      assert.equal(activity.state, 'orca-discord-rpc · Working')
+      const activity = buildActivity({ projectName: 'orca-discord-rpc', agentType: 'omp', runningAgentCount: 2,
+        agentActive: true, branchName: 'main', startedAt, useUploadedArt })
+      assert.equal(activity.details, 'Oh My Pi +1 · Working')
+      assert.equal(activity.state, '📁 orca-discord-rpc')
       assert.equal(activity.largeImageKey, useUploadedArt ? 'omp' : undefined)
-      assert.equal(activity.largeImageUrl, useUploadedArt ? undefined : logoUrl)
+      assert.equal(activity.largeImageUrl, useUploadedArt ? undefined : OMP_LOGO)
       assert.equal(activity.smallImageText, 'main')
     })
   }

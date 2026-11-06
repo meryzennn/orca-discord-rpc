@@ -3,6 +3,8 @@ import type { DiscordPresence } from './discord.ts'
 import type { PresenceState } from './presence-controller.ts'
 import { createPresenceRuntime, type PresenceRuntimeStatus } from './runtime.ts'
 import { buildPluginActivity } from './plugin-presence.ts'
+import { FORMAT } from './presence-format.ts'
+import type { AgentRegistry } from './agent-registry.ts'
 
 export type PluginSession = {
   refresh(): Promise<void>
@@ -13,6 +15,8 @@ export type PluginSession = {
 
 export type PluginSessionOptions = {
   config: AppConfig
+  /** Names, artwork and model lookup for agent ids; the built-in entries when absent. */
+  registry?: AgentRegistry
   enabled: boolean
   incognito: boolean
   readState(): Promise<PresenceState | null>
@@ -60,14 +64,14 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
   const runtime = createPresenceRuntime({
     ...options.config,
     log: options.log,
-    buildActivity: input => buildPluginActivity({ ...input, incognito }),
+    buildActivity: input => buildPluginActivity({ ...input, incognito, ...(options.registry ? { registry: options.registry } : {}) }),
     deps: {
       isOrcaRunning: async () => true,
       readState: async () => {
         try {
           const state = await options.readState()
           readError = null
-          return state && incognito ? { ...state, projectName: 'Private Project', branchName: null, repoUrl: null } : state
+          return state && incognito ? { ...state, projectName: FORMAT.privateProject, branchName: null, repoUrl: null } : state
         } catch (error) {
           readError = error instanceof Error ? error.message : String(error)
           report(error)

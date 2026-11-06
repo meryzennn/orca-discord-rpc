@@ -66,7 +66,8 @@ export function runOrcaWorktreePs(command: string = ORCA_COMMAND, nodeEntry?: st
 
 export async function readPresenceState(
   runWorktreePs: () => Promise<string> = runOrcaWorktreePs,
-  resolveRepoUrl?: (path: string) => Promise<string | null>
+  resolveRepoUrl?: (path: string) => Promise<string | null>,
+  findModel: (agentType: string | null, worktreePath: string | null) => string | null = findAgentModel
 ): Promise<PresenceState | null> {
   const worktrees = parseWorktreePs(await runWorktreePs())
   const active = selectActiveWorktree(worktrees)
@@ -79,7 +80,7 @@ export async function readPresenceState(
     projectName: projectNameFor(active),
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
-    model: findAgentModel(agentType, typeof active.path === 'string' ? active.path : null),
+    model: findModel(agentType, typeof active.path === 'string' ? active.path : null),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),

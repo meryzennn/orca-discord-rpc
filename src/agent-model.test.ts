@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { claudeProjectSlug, findAgentModel, lastModelIn, prettyModelName } from './agent-model.ts'
+import { findAgentModel, prettyModelName } from './agent-model.ts'
+import { createAgentRegistry } from './agent-registry.ts'
+import { claudeProjectSlug } from './model-resolvers/claude.ts'
+import { lastModelIn } from './model-resolvers/session-files.ts'
 import { buildPluginActivity } from './plugin-presence.ts'
 
 describe('prettyModelName', () => {
@@ -213,6 +216,8 @@ describe('findAgentModel', () => {
     const transcriptFile = join(transcriptDir, 'transcript.jsonl')
     writeFileSync(transcriptFile, JSON.stringify({
       step_index: 0,
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
       content: '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Gemini 3.8 Flash (High).\n</USER_SETTINGS_CHANGE>'
     }) + '\n')
     const sources = { env: noEnv, home }
@@ -235,9 +240,32 @@ describe('findAgentModel', () => {
 
     appendFileSync(transcriptFile, JSON.stringify({
       step_index: 1,
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
       content: '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from Gemini 3.8 Flash (High) to gemini-2.5-pro.\n</USER_SETTINGS_CHANGE>'
     }) + '\n')
     assert.equal(findAgentModel('antigravity', '/home/me/app', sources), 'Gemini 2.5 Pro')
+  })
+
+  it('ignores the settings-change phrase when it is only quoted in tool calls, tool output or thinking', () => {
+    freshHome()
+    const agyHome = join(home, '.gemini', 'antigravity-cli')
+    mkdirSync(agyHome, { recursive: true })
+    writeFileSync(join(agyHome, 'history.jsonl'), JSON.stringify({ workspace: '/home/me/app', conversationId: 'c1' }) + '\n')
+    const transcriptDir = join(agyHome, 'brain', 'c1', '.system_generated', 'logs')
+    mkdirSync(transcriptDir, { recursive: true })
+    const phrase = '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from Gemini 3.8 Flash (High) to gemini-2.5-pro.\n</USER_SETTINGS_CHANGE>'
+    const entries = [
+      { step_index: 0, source: 'USER_EXPLICIT', type: 'USER_INPUT',
+        content: '<USER_REQUEST>\nhi\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\n<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Gemini 3.8 Flash (High). No need to comment on this change if the user doesn\'t ask about it.\n</USER_SETTINGS_CHANGE>\n</ADDITIONAL_METADATA>' },
+      { step_index: 1, source: 'MODEL', type: 'GENERIC', content: phrase },
+      { step_index: 2, source: 'MODEL', type: 'PLANNER_RESPONSE', thinking: phrase,
+        tool_calls: [{ name: 'edit_file', args: { Replacement: JSON.stringify(JSON.stringify(phrase)) } }] },
+      { step_index: 3, source: 'USER_EXPLICIT', type: 'USER_INPUT',
+        content: 'Why does `Model Selection` to Gemini 2.5 Pro. show up?' }
+    ]
+    writeFileSync(join(transcriptDir, 'transcript.jsonl'), entries.map(entry => JSON.stringify(entry)).join('\n') + '\n')
+    assert.equal(findAgentModel('antigravity', '/home/me/app', { env: noEnv, home }), 'Gemini 3.8 Flash (High)')
   })
 
   it('falls back to Antigravity settings.json when no conversation transcript is recorded', () => {
@@ -266,5 +294,46 @@ describe('findAgentModel', () => {
     assert.equal(findAgentModel('antigravity', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel(null, '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('claude', null, { env: noEnv, home }), null)
+  })
+
+  it('lets the registry hand a custom agent id an existing resolver', () => {
+    freshHome()
+    const day = join(home, '.codex', 'sessions', '2026', '10', '08')
+    mkdirSync(day, { recursive: true })
+    writeFileSync(join(day, 'rollout-a.jsonl'),
+      '{"type":"session_meta","payload":{"cwd":"/home/me/app"}}\n{"type":"turn_context","payload":{"model":"gpt-5.1-codex"}}\n')
+    const registry = createAgentRegistry({ overrides: { 'my-codex': { modelResolver: 'codex' } } })
+    assert.equal(findAgentModel('my-codex', '/home/me/app', { env: noEnv, home }, registry), 'GPT-5.1 Codex')
+    assert.equal(findAgentModel('other-agent', '/home/me/app', { env: noEnv, home }, registry), null)
+  })
+
+  it('has no resolver for an unknown agent and logs the unknown id once', () => {
+    freshHome()
+    const logs: string[] = []
+    const registry = createAgentRegistry({ log: message => logs.push(message) })
+    for (let poll = 0; poll < 3; poll++) assert.equal(findAgentModel('new-agent', '/home/me/app', { env: noEnv, home }, registry), null)
+    assert.equal(logs.length, 1)
+  })
+
+  it('names an unknown resolver id once and falls back to no model', () => {
+    freshHome()
+    const logs: string[] = []
+    const registry = createAgentRegistry({ log: message => logs.push(message),
+      overrides: { 'my-agent': { modelResolver: 'constructor' } } })
+    for (let poll = 0; poll < 3; poll++) assert.equal(findAgentModel('my-agent', '/home/me/app', { env: noEnv, home }, registry), null)
+    assert.equal(logs.length, 1)
+    assert.match(logs[0]!, /resolver/)
+  })
+
+  it('swallows a failing resolver, logs it once and falls back to no model', () => {
+    freshHome()
+    // A file where the sessions folder belongs makes the directory scan throw.
+    writeFileSync(join(home, 'sessions'), 'not a directory')
+    const sources = { home, env: (name: string) => name === 'CODEX_HOME' ? home : undefined }
+    const logs: string[] = []
+    const registry = createAgentRegistry({ log: message => logs.push(message) })
+    for (let poll = 0; poll < 3; poll++) assert.equal(findAgentModel('codex', '/home/me/app', sources, registry), null)
+    assert.equal(logs.length, 1)
+    assert.match(logs[0]!, /Model lookup/)
   })
 })

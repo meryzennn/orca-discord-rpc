@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createDiscordIpcClient } from './discord-ipc.ts'
-import { loadConfig, type ConfigFile } from './config.ts'
+import { createAgentRegistry } from './agent-registry.ts'
+import { findAgentModel } from './agent-model.ts'
+import { loadConfig, readConfigFile, type ConfigFile } from './config.ts'
 import { configPath } from './paths.ts'
 import { createDiscordPresence } from './discord.ts'
 import { readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
@@ -11,7 +12,6 @@ import type { PresenceRuntimeStatus } from './runtime.ts'
 import { resolveBundledCliEntry, pluginDiscordPaths } from './plugin-platform.ts'
 
 type Disposable = { dispose(): void }
-export type LegacyConfig = ConfigFile & { incognito?: unknown }
 export type PluginApi = {
   log(message: string): void
   settings: {
@@ -24,16 +24,9 @@ export type PluginApi = {
   host: { call(method: 'statusBar.update', params: Record<string, string>): Promise<unknown> }
 }
 
-export function readLegacyConfig(path: string): LegacyConfig | null {
-  try {
-    const value: unknown = JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''))
-    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as LegacyConfig : null
-  } catch { return null }
-}
-
 export function createPluginLifecycle(
   orca: PluginApi,
-  legacy: LegacyConfig | null,
+  legacy: ConfigFile | null,
   startSession: (enabled: boolean, incognito: boolean, signal: AbortSignal,
     onStatus: (status: PresenceRuntimeStatus) => void) => PluginSession
 ): { activate(): Promise<void>; deactivate(): Promise<void> } {
@@ -136,8 +129,10 @@ export function createPluginLifecycle(
 let lifecycle: ReturnType<typeof createPluginLifecycle> | null = null
 
 export default async function activate(orca: PluginApi): Promise<void> {
-  const legacy = readLegacyConfig(configPath())
+  const log = (message: string): void => orca.log(message)
+  const legacy = readConfigFile(configPath(), log)
   const config = loadConfig({ env: {}, readConfigFile: () => legacy })
+  const registry = createAgentRegistry({ overrides: config.agents, log })
   const cliEntry = resolveBundledCliEntry(process.execPath, process.platform)
   const uid = process.getuid?.()
   const runtimeDirectory = process.platform === 'linux'
@@ -145,9 +140,10 @@ export default async function activate(orca: PluginApi): Promise<void> {
     : undefined
   const paths = pluginDiscordPaths(process.platform, tmpdir(), runtimeDirectory)
   const current = createPluginLifecycle(orca, legacy, (enabled, incognito, signal, onStatus) => createPluginSession({
-    config, enabled, incognito, onStatus, log: message => orca.log(message),
+    config, registry, enabled, incognito, onStatus, log,
     readState: () => readPresenceState(
-      () => runOrcaWorktreePs(process.execPath, cliEntry, signal), path => readRepoUrl(path, signal)
+      () => runOrcaWorktreePs(process.execPath, cliEntry, signal), path => readRepoUrl(path, signal),
+      (agentType, path) => findAgentModel(agentType, path, undefined, registry)
     ),
     transport: createDiscordPresence(config.clientId, clientId => createDiscordIpcClient(clientId, paths))
   }))

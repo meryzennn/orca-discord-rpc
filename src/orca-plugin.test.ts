@@ -4,9 +4,9 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { setImmediate } from 'node:timers/promises'
-import { createPluginLifecycle, readLegacyConfig, type PluginApi, type LegacyConfig } from './orca-plugin.ts'
+import { createPluginLifecycle, type PluginApi } from './orca-plugin.ts'
 import { createPluginSession } from './plugin-session.ts'
-import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
+import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS, readConfigFile, type ConfigFile } from './config.ts'
 import type { PresenceActivity } from './presence.ts'
 import type { PresenceState } from './presence-controller.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
@@ -23,19 +23,24 @@ it('declares a resident worker with a real status command and both refresh event
   assert.equal(manifest.contributes.settings.find((setting: { key: string }) => setting.key === 'incognito').default, undefined)
 })
 
-it('reads valid legacy Incognito through a BOM and ignores malformed config', () => {
+it('reads valid legacy Incognito through a BOM, stays quiet when absent and logs malformed config', () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-plugin-bootstrap-'))
   try {
     const config = join(root, 'config.json')
-    assert.equal(readLegacyConfig(config), null)
+    const logs: string[] = []
+    assert.equal(readConfigFile(config, message => logs.push(message)), null)
+    assert.equal(logs.length, 0)
     for (const contents of ['{"incognito":true}', '\uFEFF{"incognito":true}']) {
       writeFileSync(config, contents)
-      assert.equal(readLegacyConfig(config)?.incognito, true)
+      assert.equal(readConfigFile(config, message => logs.push(message))?.incognito, true)
     }
+    assert.equal(logs.length, 0)
     for (const contents of ['[', '[]', 'null', 'true']) {
       writeFileSync(config, contents)
-      assert.equal(readLegacyConfig(config), null)
+      assert.equal(readConfigFile(config, message => logs.push(message)), null)
     }
+    assert.equal(logs.length, 4)
+    assert.ok(logs.every(message => message.startsWith('config.json ')))
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -45,7 +50,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function harness(values: Record<string, unknown> = {}, legacy: LegacyConfig | null = null,
+function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null = null,
   readState?: (signal: AbortSignal) => Promise<PresenceState | null>) {
   const settings = new Map(Object.entries(values))
   const commands = new Map<string, () => Promise<unknown>>()
@@ -126,7 +131,7 @@ it('migrates only a legacy boolean before the first push and preserves saved Inc
       await h.lifecycle.activate()
       await setImmediate()
       assert.deepEqual(h.writes, migrated ? [['incognito', expected]] : [])
-      assert.equal(h.activities[0]?.state, expected ? 'Folder: Private Project' : 'Folder: secret-project')
+      assert.equal(h.activities[0]?.state, expected ? '📁 Private Project' : '📁 secret-project')
       if (expected) assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     } finally { await h.lifecycle.deactivate() }
   }
@@ -200,7 +205,7 @@ it('wires native pause/resume, both event refreshes, and live privacy changes', 
     h.change('incognito', true)
     await setImmediate()
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
-    assert.equal(h.activities.at(-1)?.state, 'Folder: Private Project')
+    assert.equal(h.activities.at(-1)?.state, '📁 Private Project')
     assert.ok(!JSON.stringify(h.activities.at(-1)).includes('secret-branch'))
   } finally { await h.lifecycle.deactivate() }
 })
@@ -239,7 +244,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
     gate.resolve()
     await setImmediate()
     assert.equal(h.activities.length, 1)
-    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project')
     assert.ok(!JSON.stringify(h.activities).includes('secret-project'))
     assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     assert.deepEqual(h.order, ['clear', 'apply'])
@@ -260,7 +265,7 @@ it('logs an invalid live setting and continues processing the next valid change'
     await assert.rejects(h.commands.get('presence.toggle')!(), /enabled setting must be boolean/)
     h.change('enabled', true)
     await setImmediate()
-    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project')
   } finally { await h.lifecycle.deactivate() }
 })
 
@@ -305,11 +310,11 @@ it('toggles Incognito from the status bar and synchronizes external settings cha
     await setImmediate()
     assert.deepEqual(h.writes.at(-1), ['incognito', true])
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
-    assert.equal(h.activities.at(-1)?.state, 'Folder: Private Project')
+    assert.equal(h.activities.at(-1)?.state, '📁 Private Project')
     h.change('incognito', false)
     await setImmediate()
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito Off')
-    assert.equal(h.activities.at(-1)?.state, 'Folder: secret-project')
+    assert.equal(h.activities.at(-1)?.state, '📁 secret-project')
   } finally { await h.lifecycle.deactivate() }
 })
 
@@ -369,7 +374,7 @@ it('applies status-bar privacy intent before a pending resume can publish a publ
     gate.resolve()
     await setImmediate()
     assert.equal(h.activities.length, 1)
-    assert.equal(h.activities[0]?.state, 'Folder: Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project')
     assert.ok(!JSON.stringify(h.activities).includes('secret-'))
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
   } finally { gate.resolve(); await h.lifecycle.deactivate() }
