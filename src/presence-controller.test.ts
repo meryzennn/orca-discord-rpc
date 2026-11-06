@@ -72,6 +72,18 @@ it('uses the injected tray builder and republishes origin edits without resettin
 })
 
 describe('createPresenceController', () => {
+  it('can republish an unchanged activity with its original clock while ordinary reset starts a new session', async () => {
+    const h = harness(RUNNING)
+    await h.controller.poll()
+    h.setNow(T1)
+    h.controller.reset(true)
+    await h.controller.poll()
+    assert.equal(h.applied.length, 2)
+    assert.equal(h.applied[1]?.startTimestamp, T0)
+    h.controller.reset()
+    await h.controller.poll()
+    assert.equal(h.applied[2]?.startTimestamp, T1)
+  })
   it('applies the first reading', async () => {
     const h = harness(RUNNING)
     await h.controller.poll()

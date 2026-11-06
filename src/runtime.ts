@@ -35,7 +35,8 @@ export type PresenceRuntimeOptions = {
 }
 
 export type PresenceRuntime = {
-  start: () => Promise<void>
+  /** Starts publishing; preserveSession retains the clock during a privacy refresh. */
+  start: (preserveSession?: boolean) => Promise<void>
   /** Stops polling; returns whether Discord acknowledged clearing the activity. */
   pause: () => Promise<boolean>
   /** Real teardown: destroys the transport as well. */
@@ -140,15 +141,14 @@ export function createPresenceRuntime(options: PresenceRuntimeOptions): Presence
   }
 
   return {
-    async start(): Promise<void> {
+    async start(preserveSession = false): Promise<void> {
       ensureWired()
       if (started && !paused) {
         await tick()
         return
       }
-      // Why reset on a resume: whatever Discord was showing was cleared by pause/stop, so the
-      // unchanged state has to be pushed again even though the dedupe key would match.
-      controller?.reset()
+      // Clear invalidates deduplication; privacy refreshes retain the session clock.
+      controller?.reset(preserveSession)
       started = true
       paused = false
       cancel?.()

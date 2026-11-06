@@ -117,7 +117,7 @@ export function createPluginSession(options: PluginSessionOptions): PluginSessio
           if (!cleared) await destroyTransport()
         }
         privacyPending = false
-        if (!closed && enabled) await runtime.start()
+        if (!closed && enabled) await runtime.start(true)
       })
     },
     stop: () => {

@@ -33,13 +33,13 @@ export type PresenceController = {
    * Forgets what was last sent, so the next poll pushes again.
    * Why: an activity that was cleared — by a pause, a stop, or Discord restarting — is
    * no longer displayed, so the unchanged state must be sent a second time.
+   * Preserve the session clock for presentation-only changes such as privacy toggles.
    */
-  reset: () => void
+  reset: (preserveSession?: boolean) => void
 }
 
 /**
- * Dedups polling into Discord updates: an unchanged reading costs nothing, and the
- * elapsed timer resets only when the project changes, never on an agent churn.
+ * Dedups polling into Discord updates while keeping the elapsed session clock.
  *
  * A failed apply is deliberately not remembered: Discord is often started after Orca,
  * and a remembered failure would leave the profile blank until the state changed.
@@ -108,9 +108,9 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         sessionStartedAt = startedAt
       }
     },
-    reset(): void {
+    reset(preserveSession = false): void {
       lastKey = null
-      sessionStartedAt = null
+      if (!preserveSession) sessionStartedAt = null
     }
   }
 }

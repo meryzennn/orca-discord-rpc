@@ -1,4 +1,4 @@
-import { it } from 'node:test'
+import { it, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
 import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS } from './config.ts'
@@ -101,6 +101,43 @@ it('redacts private state before the reused builder and clears before changing p
   assert.equal(h.pushed[1]?.smallImageText, 'Agent: Oh My Pi')
   assert.deepEqual(h.pushed[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/secret-owner/secret-repo' }])
   await h.session.stop()
+})
+
+it('preserves the Playing session timer when toggling Incognito in either direction', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 7, 0, 0, 0) })
+  const h = harness({ incognito: false })
+  try {
+    await h.session.refresh()
+    const started = h.pushed[0]!.startTimestamp.getTime()
+    mock.timers.tick(60000)
+    await h.session.setIncognito(true)
+    assert.equal(h.pushed.at(-1)?.state, 'Folder: Private Project')
+    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    mock.timers.tick(60000)
+    await h.session.setIncognito(false)
+    assert.equal(h.pushed.at(-1)?.state, 'Folder: secret-project')
+    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
+  } finally { await h.session.stop(); mock.timers.reset() }
+})
+
+it('starts a new session timer after the workspace disappears, including in Incognito', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 7, 0, 0, 0) })
+  let current: PresenceState | null = state
+  const h = harness({ incognito: false, readState: async () => current })
+  try {
+    await h.session.refresh()
+    const started = h.pushed[0]!.startTimestamp.getTime()
+    mock.timers.tick(60000)
+    current = null
+    await h.session.refresh()
+    await h.session.setIncognito(true)
+    current = state
+    mock.timers.tick(60000)
+    await h.session.refresh()
+    assert.equal(h.pushed.at(-1)?.state, 'Folder: Private Project')
+    assert.ok(h.pushed.at(-1)!.startTimestamp.getTime() > started)
+  } finally { await h.session.stop(); mock.timers.reset() }
 })
 
 it('applies new Incognito intent before a pending read can publish its result', async () => {

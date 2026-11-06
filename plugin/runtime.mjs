@@ -1058,9 +1058,9 @@ function createPresenceController(deps) {
         sessionStartedAt = startedAt;
       }
     },
-    reset() {
+    reset(preserveSession = false) {
       lastKey = null;
-      sessionStartedAt = null;
+      if (!preserveSession) sessionStartedAt = null;
     }
   };
 }
@@ -1203,13 +1203,13 @@ function createPresenceRuntime(options) {
     });
   };
   return {
-    async start() {
+    async start(preserveSession = false) {
       ensureWired();
       if (started && !paused) {
         await tick();
         return;
       }
-      controller?.reset();
+      controller?.reset(preserveSession);
       started = true;
       paused = false;
       cancel?.();
@@ -1390,7 +1390,7 @@ function createPluginSession(options) {
           if (!cleared) await destroyTransport();
         }
         privacyPending = false;
-        if (!closed && enabled) await runtime.start();
+        if (!closed && enabled) await runtime.start(true);
       });
     },
     stop: () => {

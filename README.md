@@ -35,7 +35,7 @@ Use the controls in Orca's status bar:
 
 Incognito replaces your folder with `Private Project` and hides the repository button. Your agent and model stay visible. Changing Incognito while paused keeps presence paused; the new privacy choice takes effect when you resume.
 
-Privacy changes update presence without reloading the plugin. Closing Orca or disabling the plugin stops its worker and presence.
+Privacy changes update presence without reloading the plugin or restarting the Playing timer. Closing Orca or disabling the plugin stops its worker and presence.
 
 ## What Discord shows
 
