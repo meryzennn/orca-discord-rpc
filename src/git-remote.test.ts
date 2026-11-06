@@ -6,6 +6,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeRepoUrl, readRepoUrl } from './git-remote.ts'
+import { readPresenceState } from './orca-reader.ts'
+import { buildTrayActivity } from './tray-presence.ts'
 
 it('normalizes Git origins to web URLs and strips credentials, port and suffixes', () => {
   for (const [raw, expected] of [
@@ -58,6 +60,22 @@ it('returns null for non-Git directories even when global Git config defines an 
     else process.env.GIT_CONFIG_GLOBAL = previous
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+it('preserves a normalized repository suffix through the reader and tray builder', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-git-suffix-'))
+  try {
+    execFileSync('git', ['init', '--quiet', directory], { windowsHide: true })
+    execFileSync('git', ['-C', directory, 'config', '--local', 'remote.origin.url',
+      'https://user:secret@example.com:8443/owner/repo.git.git?token=secret#anchor'], { windowsHide: true })
+    const state = await readPresenceState(async () => JSON.stringify({ ok: true, result: {
+      worktrees: [{ isActive: true, path: directory, agents: [] }]
+    } }), readRepoUrl)
+    assert.equal(state?.repoUrl, 'https://example.com/owner/repo.git')
+    assert.ok(state)
+    const activity = buildTrayActivity({ ...state, startedAt: new Date('2026-11-06T00:00:00Z') })
+    assert.deepEqual(activity.buttons, [{ label: 'View Repository', url: 'https://example.com/owner/repo.git' }])
+  } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
 it('bounds the shell-free child and preserves in-flight cancellation while hiding Git errors', async () => {

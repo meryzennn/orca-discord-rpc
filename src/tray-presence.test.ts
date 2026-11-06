@@ -8,7 +8,7 @@ const base = {
 }
 
 it('uses tray agent/status/folder labels and normal branch art with a sanitized repository button', () => {
-  assert.deepEqual(buildTrayActivity({ ...base, repoUrl: 'https://user:secret@github.com:443/owner/repo.git?token=secret#anchor' }), {
+  assert.deepEqual(buildTrayActivity({ ...base, repoUrl: 'https://user:secret@github.com:443/owner/repo?token=secret#anchor' }), {
     details: 'Agent: Claude +1 · Working', state: 'Folder: sample', startTimestamp: base.startedAt,
     largeImageKey: 'orca', largeImageText: 'Orca', smallImageKey: 'git-branch', smallImageText: 'feature/work',
     buttons: [{ label: 'View Repository', url: 'https://github.com/owner/repo' }]
@@ -78,7 +78,14 @@ it('keeps brand spellings, limits and unicode boundaries while preserving the ag
 
 it('rejects invalid or local origins at the final button boundary', () => {
   for (const repoUrl of ['javascript:alert(1)', 'file:///secret/repo', 'https://', '/local/repo', 'https://github.com',
-    'https://github.com/owner\\repo', 'https://github.com/o/%zz', 'https://github.com/o/%00repo']) {
+    'https://github.com/owner\\repo', 'https://github.com/o/%zz', 'https://github.com/o/%00repo',
+    'ssh://git@github.com/owner/repo', 'git@github.com:owner/repo.git']) {
     assert.equal(buildTrayActivity({ ...base, repoUrl }).buttons, undefined, repoUrl)
   }
+})
+
+it('redacts a web repository URL without mutating its legitimate Git suffix', () => {
+  assert.deepEqual(buildTrayActivity({ ...base,
+    repoUrl: 'https://user:secret@example.com:8443/owner/repo.git?token=secret#anchor'
+  }).buttons, [{ label: 'View Repository', url: 'https://example.com/owner/repo.git' }])
 })

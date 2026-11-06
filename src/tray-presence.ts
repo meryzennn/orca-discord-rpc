@@ -1,6 +1,6 @@
 import { agentDisplayName, PRESENCE_ASSET_KEY, type PresenceActivity, type PresenceInput } from './presence.ts'
 import { agentArtKey, agentFaviconUrl, BRANCH_ART_KEY, BRANCH_ICON_URL } from './agent-art.ts'
-import { normalizeRepoUrl } from './git-remote.ts'
+import { sanitizeRepoWebUrl } from './git-remote.ts'
 
 function truncate(value: string, limit: number): string {
   return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, '')
@@ -42,7 +42,7 @@ export function buildTrayActivity(input: PresenceInput & { incognito?: boolean }
     activity.smallImageText = text(input.branchName) || 'Branch'
     if (uploaded) activity.smallImageKey = BRANCH_ART_KEY
     else activity.smallImageUrl = BRANCH_ICON_URL
-    const repoUrl = normalizeRepoUrl(input.repoUrl)
+    const repoUrl = sanitizeRepoWebUrl(input.repoUrl)
     if (repoUrl) activity.buttons = [{ label: 'View Repository', url: repoUrl }]
   }
   return activity

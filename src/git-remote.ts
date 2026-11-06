@@ -1,5 +1,16 @@
 import { execFile } from 'node:child_process'
 
+export function sanitizeRepoWebUrl(raw: string | null | undefined): string | null {
+  const source = raw?.trim()
+  if (!source || /[\s\\\x00-\x1f\x7f]/.test(source) || !/^https?:\/\//i.test(source)) return null
+  try {
+    const url = new URL(source)
+    const path = url.pathname
+    if (!url.hostname || path === '/' || path.includes('//') || /[\\\x00-\x1f\x7f]/.test(decodeURIComponent(path))) return null
+    return new URL(`${url.protocol}//${url.hostname}${path}`).href
+  } catch { return null }
+}
+
 export function normalizeRepoUrl(raw: string | null | undefined): string | null {
   const remote = raw?.trim()
   if (!remote || /[\s\\\x00-\x1f\x7f]/.test(remote) || /^[a-z]:/i.test(remote)) return null
@@ -13,9 +24,8 @@ export function normalizeRepoUrl(raw: string | null | undefined): string | null 
     const url = new URL(source)
     if (!['https:', 'http:', 'ssh:'].includes(url.protocol) || !url.hostname) return null
     const path = url.pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
-    if (!path || path === '/' || path.includes('//') || /[\\\x00-\x1f\x7f]/.test(decodeURIComponent(path))) return null
     const protocol = url.protocol === 'ssh:' ? 'https:' : url.protocol
-    return new URL(`${protocol}//${url.hostname}${path}`).href
+    return sanitizeRepoWebUrl(`${protocol}//${url.hostname}${path}`)
   } catch { return null }
 }
 

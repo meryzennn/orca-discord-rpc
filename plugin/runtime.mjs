@@ -31777,6 +31777,18 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoU
 
 // src/git-remote.ts
 import { execFile as execFile2 } from "node:child_process";
+function sanitizeRepoWebUrl(raw) {
+  const source = raw?.trim();
+  if (!source || /[\s\\\x00-\x1f\x7f]/.test(source) || !/^https?:\/\//i.test(source)) return null;
+  try {
+    const url = new URL(source);
+    const path = url.pathname;
+    if (!url.hostname || path === "/" || path.includes("//") || /[\\\x00-\x1f\x7f]/.test(decodeURIComponent(path))) return null;
+    return new URL(`${url.protocol}//${url.hostname}${path}`).href;
+  } catch {
+    return null;
+  }
+}
 function normalizeRepoUrl(raw) {
   const remote = raw?.trim();
   if (!remote || /[\s\\\x00-\x1f\x7f]/.test(remote) || /^[a-z]:/i.test(remote)) return null;
@@ -31790,9 +31802,8 @@ function normalizeRepoUrl(raw) {
     const url = new URL(source);
     if (!["https:", "http:", "ssh:"].includes(url.protocol) || !url.hostname) return null;
     const path = url.pathname.replace(/\/+$/, "").replace(/\.git$/i, "");
-    if (!path || path === "/" || path.includes("//") || /[\\\x00-\x1f\x7f]/.test(decodeURIComponent(path))) return null;
     const protocol = url.protocol === "ssh:" ? "https:" : url.protocol;
-    return new URL(`${protocol}//${url.hostname}${path}`).href;
+    return sanitizeRepoWebUrl(`${protocol}//${url.hostname}${path}`);
   } catch {
     return null;
   }
@@ -32236,7 +32247,7 @@ function buildTrayActivity(input) {
     activity.smallImageText = text(input.branchName) || "Branch";
     if (uploaded) activity.smallImageKey = BRANCH_ART_KEY;
     else activity.smallImageUrl = BRANCH_ICON_URL;
-    const repoUrl = normalizeRepoUrl(input.repoUrl);
+    const repoUrl = sanitizeRepoWebUrl(input.repoUrl);
     if (repoUrl) activity.buttons = [{ label: "View Repository", url: repoUrl }];
   }
   return activity;
