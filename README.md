@@ -2,7 +2,7 @@
 
 Show your active [Orca](https://github.com/stablyai/orca) workspace and coding agent on your Discord profile.
 
-The Orca plugin runs on Windows, macOS, and Linux. It starts with Orca and uses Orca's bundled runtime, so plugin users do not need a separate tray app, Node.js installation, or terminal command.
+The plugin is written in TypeScript, bundled as JavaScript, and runs in Orca's built-in Node.js worker on Windows, macOS, and Linux. It starts with Orca, so plugin users do not need a separate tray app, Node.js installation, or terminal command.
 
 ## Install
 
@@ -36,6 +36,14 @@ Use the controls in Orca's status bar:
 Incognito replaces your folder with `Private Project` and hides the repository button. Your agent and model stay visible. Changing Incognito while paused keeps presence paused; the new privacy choice takes effect when you resume.
 
 Privacy changes update presence without reloading the plugin or restarting the Playing timer. Closing Orca or disabling the plugin stops its worker and presence.
+
+## Updates
+
+Direct Git installs keep a copy of the commit selected at installation. `#main` selects the branch when Orca fetches the source; pushing a new commit does not update existing installations automatically.
+
+To take a newer commit, use Settings > Plugins > Add Plugin with the same `.git#main` URL and review the newly resolved commit before installing it. Restarting or pausing RPC does not fetch new code.
+
+Orca's automatic update policy applies to versioned catalog/marketplace releases. This repository currently uses direct Git installation. A future catalog release that requests additional access would require user approval.
 
 ## What Discord shows
 
@@ -107,6 +115,8 @@ OMP lookup uses the standard `~/.omp/agent/sessions` layout. Custom profiles, cu
 ## RAM and CPU
 
 The current plugin uses Node built-ins for Discord IPC and has no npm runtime dependencies. A controlled comparison on Windows used the same Orca executable, a Ryzen 5 5500, and 12 logical CPUs. Both bundles were imported into isolated workers with presence paused, without Discord connections or workspace polling:
+
+Bun is not used in this version. Orca selects Node.js for the plugin worker, so using Bun as a package manager or build tool would leave that runtime in place. The measured change below comes from replacing the RPC SDK with minimal Node IPC; no Bun or Rust memory benchmark is claimed.
 
 | Metric | Previous SDK bundle | Minimal IPC bundle |
 | --- | --- | --- |
