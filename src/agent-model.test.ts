@@ -1,9 +1,10 @@
 import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { claudeProjectSlug, findAgentModel, lastModelIn, prettyModelName } from './agent-model.ts'
+import { buildTrayActivity } from './tray-presence.ts'
 
 describe('prettyModelName', () => {
   it('names the model the way people write it', () => {
@@ -115,11 +116,73 @@ describe('findAgentModel', () => {
     assert.equal(findAgentModel('claude', '/home/me/app', { env, home }), 'Claude Haiku 4.5')
   })
 
+  it('reads OMP model changes for the workspace and uses the model tooltip in both modes', () => {
+    freshHome()
+    const bucket = join(home, '.omp', 'agent', 'sessions', 'opaque-workspace-bucket')
+    mkdirSync(bucket, { recursive: true })
+    const file = join(bucket, 'main.jsonl')
+    const records = [
+      { type: 'session', version: 3, id: 'main', timestamp: '2026-11-06T00:00:00Z', cwd: '/home/me/app' },
+      { type: 'model_change', id: 'model-a', parentId: null, model: 'anthropic/claude-opus-5-5' },
+      { type: 'message', id: 'answer', parentId: 'model-a', message: { role: 'assistant', model: 'claude-opus-5-5', content: [] } },
+      { type: 'model_change', id: 'model-b', parentId: 'answer', role: 'default', model: 'anthropic/claude-sonnet-5-5' }
+    ]
+    writeFileSync(file, records.map(record => JSON.stringify(record)).join('\n') + '\n')
+    const sources = { env: noEnv, home }
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Sonnet 5.5')
+    for (const incognito of [false, true]) {
+      const activity = buildTrayActivity({ projectName: 'app', agentType: 'omp', runningAgentCount: 1,
+        startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true,
+        model: findAgentModel('omp', '/home/me/app', sources), incognito })
+      assert.equal(activity.smallImageKey, 'omp')
+      assert.equal(activity.smallImageText, 'Claude Sonnet 5.5')
+    }
+    appendFileSync(file, JSON.stringify({ type: 'model_change', id: 'model-c', parentId: 'model-b',
+      role: 'default', model: 'google-antigravity/gemini-3.8-flash' }) + '\n' +
+      JSON.stringify({ type: 'message', message: { role: 'user', content: 'x'.repeat(200_000) } }) + '\n')
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Gemini 3.8 Flash')
+  })
+
+  it('does not take an OMP model from another workspace or a newer child-session artifact', () => {
+    freshHome()
+    const root = join(home, '.omp', 'agent', 'sessions')
+    const write = (bucket: string, cwd: string, model: string) => {
+      const directory = join(root, bucket)
+      mkdirSync(directory, { recursive: true })
+      const file = join(directory, 'session.jsonl')
+      writeFileSync(file, JSON.stringify({ type: 'session', version: 3, cwd }) + '\n' +
+        JSON.stringify({ type: 'model_change', model }) + '\n')
+      return file
+    }
+    const main = write('workspace', '/home/me/app', 'anthropic/claude-sonnet-5-5')
+    const old = new Date(Date.now() - 3_600_000)
+    utimesSync(main, old, old)
+    write('other', '/home/me/other', 'openai/gpt-4o')
+    write('workspace/session/children', '/home/me/app', 'openai/gpt-4o')
+    assert.equal(findAgentModel('omp', '/home/me/app', { env: noEnv, home }), 'Claude Sonnet 5.5')
+    assert.equal(findAgentModel('omp', '/home/me/missing', { env: noEnv, home }), null)
+  })
+
+  it('honours an explicit OMP agent directory without guessing a model from config', () => {
+    freshHome()
+    const agentDir = join(home, 'custom-omp')
+    const bucket = join(agentDir, 'sessions', 'workspace')
+    mkdirSync(bucket, { recursive: true })
+    writeFileSync(join(agentDir, 'config.yml'), 'model: openai/gpt-4o\n')
+    const sources = { home, env: (name: string) => name === 'PI_CODING_AGENT_DIR' ? agentDir : undefined }
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), null)
+    writeFileSync(join(bucket, 'session.jsonl'),
+      '{"type":"session","version":3,"cwd":"/home/me/app"}\n' +
+      '{"type":"model_change","model":"anthropic/claude-opus-5-5"}\n')
+    assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Opus 5.5')
+  })
+
   it('knows nothing for an unsupported agent or a missing log', () => {
     freshHome()
     assert.equal(findAgentModel('opencode', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('claude', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('codex', '/home/me/app', { env: noEnv, home }), null)
+    assert.equal(findAgentModel('omp', '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel(null, '/home/me/app', { env: noEnv, home }), null)
     assert.equal(findAgentModel('claude', null, { env: noEnv, home }), null)
   })

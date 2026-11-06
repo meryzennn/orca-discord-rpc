@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 
 /**
  * The model an agent is running. Orca does not report it, so this reads the agent's own
- * session log: Claude Code under ~/.claude/projects, Codex under ~/.codex/sessions.
+ * session logs for Claude Code, Codex, and Oh My Pi.
  */
 
 /** Scan backwards in small blocks so long turns don't hide their model metadata. */
@@ -12,8 +12,8 @@ const TAIL_BYTES = 64 * 1024
 const MODEL_OVERLAP_BYTES = 1024
 /** Why so small: Codex writes the folder near the start of its first line. */
 const HEAD_BYTES = 16 * 1024
-/** Why capped: Codex keeps every session for months, and only a recent one can be live. */
-const CODEX_SESSIONS_SCANNED = 50
+/** Only recent sessions can be live; avoid reading every stored transcript. */
+const SESSIONS_SCANNED = 50
 
 /** Matches only a real JSON key; a model name quoted inside a message is escaped and never matches. */
 const MODEL_FIELD = /"model":"([^"]+)"/g
@@ -41,7 +41,11 @@ export function findAgentModel(
     if (agentType === 'claude' || agentType === 'claude-agent-teams') {
       log = newestClaudeSession(nonEmpty(sources.env('CLAUDE_CONFIG_DIR')) ?? join(sources.home, '.claude'), worktreePath)
     } else if (agentType === 'codex') {
-      log = newestCodexSession(nonEmpty(sources.env('CODEX_HOME')) ?? join(sources.home, '.codex'), worktreePath)
+      const codexHome = nonEmpty(sources.env('CODEX_HOME')) ?? join(sources.home, '.codex')
+      log = newestWorkspaceSession(join(codexHome, 'sessions'), worktreePath, 'codex')
+    } else if (agentType === 'omp') {
+      const agentDir = nonEmpty(sources.env('PI_CODING_AGENT_DIR')) ?? join(sources.home, '.omp', 'agent')
+      log = newestWorkspaceSession(join(agentDir, 'sessions'), worktreePath, 'omp')
     } else {
       return null
     }
@@ -143,20 +147,26 @@ function newestClaudeSession(claudeHome: string, worktreePath: string): string |
   return newestOf(files)
 }
 
-function newestCodexSession(codexHome: string, worktreePath: string): string | null {
-  const sessions = join(codexHome, 'sessions')
+function newestWorkspaceSession(sessions: string, worktreePath: string, layout: 'codex' | 'omp'): string | null {
   if (!existsSync(sessions)) {
     return null
   }
   const wanted = normalizePath(worktreePath)
-  const recent = readdirSync(sessions, { recursive: true, encoding: 'utf8' })
-    .filter((name) => basename(name).startsWith('rollout-') && name.endsWith('.jsonl'))
+  const names = layout === 'codex'
+    ? readdirSync(sessions, { recursive: true, encoding: 'utf8' })
+      .filter(name => basename(name).startsWith('rollout-') && name.endsWith('.jsonl'))
+    : readdirSync(sessions, { withFileTypes: true }).flatMap(bucket => bucket.isDirectory()
+      ? readdirSync(join(sessions, bucket.name), { withFileTypes: true })
+        .filter(file => file.isFile() && file.name.endsWith('.jsonl'))
+        .map(file => join(bucket.name, file.name))
+      : [])
+  const recent = names
     .map((name) => {
       const file = join(sessions, name)
       return { file, at: statSync(file).mtimeMs }
     })
     .sort((a, b) => b.at - a.at)
-    .slice(0, CODEX_SESSIONS_SCANNED)
+    .slice(0, SESSIONS_SCANNED)
   for (const { file } of recent) {
     const cwd = CWD_FIELD.exec(readSlice(file, 'head', HEAD_BYTES))?.[1]
     if (cwd !== undefined && samePath(normalizePath(JSON.parse(cwd) as string), wanted)) {
