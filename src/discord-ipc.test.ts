@@ -186,7 +186,14 @@ it('destroy cancels deferred login and requests, with one disconnect notificatio
 
 it('times out login and unanswered requests and replies to peer pings', async () => {
   for (const pendingRequest of [false, true]) {
-    mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+    if (!pendingRequest) mock.timers.enable({ apis: ['setTimeout'] })
+    const originalSet = globalThis.setTimeout, originalClear = globalThis.clearTimeout
+    let expireRequest: () => void = () => { throw new Error('No request deadline was scheduled') }
+    const timerMock = pendingRequest ? mock.method(globalThis, 'setTimeout', (callback: () => void, ms?: number) => {
+      const timer = originalSet(callback, ms)
+      if (ms === 60000) expireRequest = () => { originalClear(timer); callback() }
+      return timer
+    }) : null
     const waiting = deferred()
     const server = await peer((opcode, message, socket) => {
       if (opcode === 0 && pendingRequest) socket.write(ready())
@@ -199,16 +206,10 @@ it('times out login and unanswered requests and replies to peer pings', async ()
       const job = pendingRequest ? client.user!.clearActivity() : client.login()
       const rejected = assert.rejects(job, { code: pendingRequest ? 5 : 1 })
       await waiting.promise
-      if (pendingRequest) {
-        for (let index = 0; index < 12; index++) {
-          mock.timers.tick(5000)
-          await setImmediate()
-          await setImmediate()
-          await setImmediate()
-        }
-      } else mock.timers.tick(10000)
+      if (pendingRequest) expireRequest()
+      else mock.timers.tick(10000)
       await rejected
-    } finally { await client.destroy(); await server.close(); mock.timers.reset() }
+    } finally { await client.destroy(); await server.close(); timerMock?.mock.restore(); mock.timers.reset() }
   }
   const gotPong = deferred()
   const server = await peer((opcode, _message, socket) => {
