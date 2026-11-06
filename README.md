@@ -10,13 +10,13 @@ You need **Orca 1.4.250 or newer** and the Discord desktop app, running and logg
 
 1. Open Orca's **Settings > Plugins** and turn on plugins if needed.
 2. Click **Add Plugin** and choose a Git source.
-3. Enter `https://github.com/meryzennn/orca-discord-rpc`.
-4. Select the **main** branch if Orca asks for a reference.
+3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#main`.
+4. Check that Orca resolves the **main** branch before installing.
 5. Review Orca's worker access prompt, approve the plugin, and enable it.
 
 The worker requests `workspace:read`, `agent:read`, and `settings:own`. It reads workspace information and local agent session files, then sends presence updates to Discord.
 
-The plugin is available from `main`. The [v0.1.9 release ZIP](https://github.com/meryzennn/orca-discord-rpc/releases/tag/v0.1.9) contains the standalone Windows app.
+Keep `#main` in the URL. Without a reference, Orca chooses the latest version tag, currently `v0.1.9`, which does not contain the plugin manifest. The plugin is available from `main`; the [v0.1.9 release ZIP](https://github.com/meryzennn/orca-discord-rpc/releases/tag/v0.1.9) contains the standalone Windows app.
 
 If you are switching from an older provider, stop it first. Disable the old development plugin, quit the Windows tray app, or stop the headless daemon. For the tray app, also untick **Start with Windows**. Keep one presence provider running at a time.
 
@@ -93,6 +93,7 @@ Orca scrubs shell environment overrides from workers. Set plugin configuration i
 
 | Problem | Check |
 | --- | --- |
+| No readable `orca-plugin.json` | For Git installs, use the URL ending in `.git#main`. For local installs, select the folder containing `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not enable paused presence. |
 | No activity | Open an active Orca workspace and check Discord's activity visibility settings. |
