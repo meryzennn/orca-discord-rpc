@@ -31405,6 +31405,7 @@ var import_discord_rpc = __toESM(require_dist6(), 1);
 function createDiscordPresence(clientId, createClient = (id) => new import_discord_rpc.Client({ clientId: id })) {
   let client = null;
   let connected = false;
+  let visible = false;
   let generation = 0;
   let lifecycle2 = 0;
   let lastFailure = null;
@@ -31417,6 +31418,7 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
     if (client !== current) return;
     client = null;
     connected = false;
+    visible = false;
     try {
       await current.destroy();
     } catch (error) {
@@ -31441,9 +31443,11 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
     if (epoch !== lifecycle2) return null;
     const next = createClient(clientId);
     client = next;
+    visible = false;
     next.on("disconnected", () => {
       if (client !== next) return;
       connected = false;
+      visible = false;
       lifecycle2 += 1;
       generation += 1;
     });
@@ -31482,6 +31486,7 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
         await user.setActivity(sdkActivity);
         if (client !== active || !connected) return false;
         lastFailure = null;
+        visible = true;
         return true;
       } catch (error) {
         if (active === null || client === active) {
@@ -31495,9 +31500,13 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
     async clear() {
       const current = client;
       try {
+        if (current && !current.user) {
+          failure("clear", { code: 4 });
+          return false;
+        }
         await current?.user?.clearActivity();
         if (client === current) {
-          connected = false;
+          visible = false;
           lastFailure = null;
         }
         return true;
@@ -31519,7 +31528,7 @@ function createDiscordPresence(clientId, createClient = (id) => new import_disco
       if (epoch === lifecycle2 && client === null) lastFailure = null;
     },
     connectionGeneration: () => generation,
-    isConnected: () => connected,
+    isConnected: () => connected && visible,
     lastError: () => lastFailure
   };
 }
@@ -31638,6 +31647,7 @@ import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync, stat
 import { basename, join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 var TAIL_BYTES = 64 * 1024;
+var MODEL_OVERLAP_BYTES = 1024;
 var HEAD_BYTES = 16 * 1024;
 var CODEX_SESSIONS_SCANNED = 50;
 var MODEL_FIELD = /"model":"([^"]+)"/g;
@@ -31657,7 +31667,7 @@ function findAgentModel(agentType, worktreePath, sources = defaultSources) {
     } else {
       return null;
     }
-    const raw = log === null ? null : lastModelIn(readSlice(log, "tail", TAIL_BYTES));
+    const raw = log === null ? null : readLastModel(log);
     return raw === null ? null : prettyModelName(raw);
   } catch {
     return null;
@@ -31754,6 +31764,22 @@ function newestCodexSession(codexHome, worktreePath) {
 }
 function normalizePath(path) {
   return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+function readLastModel(path) {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const buffer = Buffer.alloc(Math.min(size, TAIL_BYTES));
+    let position = Math.max(0, size - TAIL_BYTES);
+    while (true) {
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
+      const model = lastModelIn(buffer.toString("utf8", 0, read));
+      if (model !== null || position === 0) return model;
+      position = Math.max(0, position - TAIL_BYTES + MODEL_OVERLAP_BYTES);
+    }
+  } finally {
+    closeSync(fd);
+  }
 }
 function readSlice(path, end, bytes) {
   const fd = openSync(path, "r");
@@ -32241,8 +32267,9 @@ function createPresenceRuntime(options) {
       paused = true;
       cancel?.();
       cancel = null;
-      await deps.clear();
+      const cleared = await deps.clear();
       notify();
+      return cleared;
     },
     async stop() {
       started = false;
@@ -32361,7 +32388,7 @@ function createPluginSession(options) {
           throw error;
         }
       },
-      // The queued privacy change must close the old socket before any new push.
+      // Publication waits until the old activity is cleared or its socket is closed.
       apply: async (activity) => {
         if (closed || privacyPending) return false;
         const ok = await options.transport.apply(activity, () => !closed && !privacyPending);
@@ -32403,8 +32430,11 @@ function createPluginSession(options) {
       privacyPending = true;
       return serial(async () => {
         if (!closed) {
-          if (enabled) await runtime.pause().catch(report);
-          await destroyTransport();
+          const cleared = await runtime.pause().catch((error) => {
+            report(error);
+            return false;
+          });
+          if (!cleared) await destroyTransport();
         }
         privacyPending = false;
         if (!closed && enabled) await runtime.start();

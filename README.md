@@ -51,7 +51,7 @@ Before migrating, stop the old presence provider yourself. On Windows, untick St
 
 On first startup, the plugin copies Incognito from the existing `config.json` only when no plugin value is saved. Later changes stay in Orca's plugin settings. Incognito shows `Folder: Private Project`, hides the actual branch and repository button, and uses the small agent/model icon; the old activity is cleared before the privacy update is published. The public Discord application id, poll interval and uploaded-art flag still come from that file or built-in defaults. See [Configuration](#configuration) for file locations and worker environment limits.
 
-The plugin shows the featured agent in the small icon in both modes. Hovering shows its model when known, otherwise its agent name. Normal mode keeps the folder and validated View Repository button; Incognito shows Private Project and hides repository information. Changing privacy clears the previous activity and closes its connection before republishing. Missing Git or an unavailable origin leaves the button hidden. Plugin memory use has not been measured.
+The plugin shows the featured agent in the small icon in both modes. Hovering shows its model when known, otherwise its agent name. Normal mode keeps the folder and validated View Repository button; Incognito shows Private Project and hides repository information. Changing privacy waits for Discord to acknowledge clearing the previous activity, then updates presence on the same healthy connection. If clearing fails, the old connection is closed before republishing. Missing Git or an unavailable origin leaves the button hidden. Plugin memory use has not been measured.
 
 If presence cannot connect or publish, the plugin logs the failed RPC operation and error code, for example `Discord RPC login failed (code: 1)`. Its waiting tooltip shows the same diagnostic. A paused tooltip explains how to resume, even after a previous failure. RPC diagnostics omit raw SDK messages and activity payloads; the existing poll retries when Discord becomes available.
 
@@ -118,7 +118,7 @@ How each value is chosen:
 
 - The featured agent is the one that most recently changed state. A working agent wins over an idle one, so the busier session is the one people see. `+1` counts the other open agent panes.
 - The folder comes from the workspace path. A workspace you renamed in Orca keeps its name.
-- Orca does not report which model an agent runs, so the app reads it from the agent's own session log: Claude Code from `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`), Codex from `%USERPROFILE%\.codex\sessions` (or `CODEX_HOME`). When two sessions share one workspace, the one that wrote most recently wins. Other agents, or a missing log, fall back to `Agent: <name>`.
+- Orca does not report which model an agent runs, so the app reads it from the agent's own session log: Claude Code from `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`), Codex from `%USERPROFILE%\.codex\sessions` (or `CODEX_HOME`). When two sessions share one workspace, the one that wrote most recently wins. Model detection keeps the latest model through long turns and notices a model switch on the next poll. Other agents, or a missing log, fall back to `Agent: <name>`.
 - The timer keeps running when you switch workspace or agent, and resets when Orca closes or no workspace is active.
 
 ---
@@ -247,7 +247,7 @@ Run these checks yourself on Windows, macOS and Linux and record each result per
 7. Check macOS main/Helper app paths and Linux AppImage paths. On Linux, record normal Discord and each supported Snap/Flatpak variant actually tested. Denied socket access should show a retryable waiting state; do not change permissions to make a check pass.
 8. If an external icon is accepted but not displayed, use `useUploadedArt` with matching uploaded asset keys. A correct payload does not prove Discord rendered the image.
 
-For a local snapshot, choose its folder through Settings → Plugins → Add Plugin and complete Orca's access approval yourself. Disable the previous local source before enabling the new one. A temporary `RPC waiting` during privacy reconnect is expected; persistent waiting with Discord open needs the operation/code from the plugin's Settings logs. These checks require no terminal commands from the user.
+For a local snapshot, choose its folder through Settings → Plugins → Add Plugin and complete Orca's access approval yourself. Disable the previous local source before enabling the new one. Load a new version once; Incognito changes update presence without reloading the plugin. A healthy connection is reused after a confirmed clear, and an unavailable connection retries on the default 15-second poll. Incognito changes while paused take effect on resume and do not enable presence by themselves. Persistent waiting with Discord open needs the operation/code from the plugin's Settings logs. These checks require no terminal commands from the user.
 
 The repository includes a Windows/macOS/Linux Node CI matrix, but its remote jobs have not run for this local implementation. Record unavailable hosts honestly; they remain release targets and still need real lifecycle acceptance.
 
