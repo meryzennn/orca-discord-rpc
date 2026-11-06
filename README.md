@@ -49,6 +49,62 @@ Incognito replaces your folder with `Private Project` and hides the repository b
 
 Privacy changes do not reload the plugin or restart the Playing timer. Closing Orca or disabling the plugin stops the worker and presence.
 
+## How it works
+
+The plugin runs inside Orca's worker. Every poll (and every `workspace.changed` or `agent.status.changed` event) it reads your active workspace, builds a Discord activity, and sends it only when something changed.
+
+```mermaid
+flowchart LR
+  subgraph ORCA["Orca (your machine)"]
+    EV["Events<br/>workspace.changed<br/>agent.status.changed"]
+    CLI["orca worktree ps --json"]
+    LOGS["Agent session logs<br/>Claude, Codex, OMP, Antigravity"]
+    GIT["git remote of the workspace"]
+  end
+
+  subgraph PLUGIN["Plugin worker"]
+    SESSION["Session<br/>poll every 15 s + event refresh"]
+    STATE["Pick the active workspace<br/>featured agent, agent count, branch"]
+    MODEL["Model resolver<br/>reads the agent's own log"]
+    PRIV{"Incognito on?"}
+    HIDE["Folder becomes Private Project<br/>branch and repository button hidden"]
+    DEDUP{"State changed<br/>since last push?"}
+    BUILD["Build the activity<br/>text from presence-format.json<br/>names and icons from agents.json"]
+  end
+
+  DISCORD["Discord desktop app<br/>local IPC socket"]
+  PROFILE(["Your Discord profile"])
+
+  EV --> SESSION
+  SESSION --> CLI --> STATE
+  STATE --> MODEL
+  LOGS --> MODEL
+  GIT --> STATE
+  MODEL --> PRIV
+  STATE --> PRIV
+  PRIV -- yes --> HIDE --> DEDUP
+  PRIV -- no --> DEDUP
+  DEDUP -- no --> SKIP["Do nothing"]
+  DEDUP -- yes --> BUILD --> DISCORD --> PROFILE
+```
+
+The status bar item follows a small state machine:
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting: plugin starts
+  Waiting --> Connected: Discord accepts an update
+  Connected --> Waiting: Discord closes or an update fails
+  Connected --> Paused: click RPC
+  Waiting --> Paused: click RPC
+  Paused --> Waiting: click RPC again
+  Connected: RPC
+  Waiting: RPC waiting
+  Paused: RPC paused
+```
+
+Nothing is sent over the network except the local connection to your Discord app. The plugin has no network access of its own.
+
 ## Updates
 
 A Git install keeps the commit Orca resolved at install time. Neither a tag nor `#main` updates it later, and pausing or restarting RPC does not fetch code. The plugin has no network access, so it cannot tell you a new version exists.
