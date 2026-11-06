@@ -10,11 +10,11 @@ The plugin is TypeScript bundled to JavaScript. It runs in Orca's built-in Node.
 
 These are illustrations of the plugin, not captures from a live session. Real cards vary with your Discord version and theme.
 
-![Illustration of the Discord card for an Oh My Pi agent in the orca-discord-rpc folder, with a View Repository button](docs/images/orca-card.jpg)
+![Illustration of a whale tail above an Oh My Pi, Idle presence chip](docs/images/whale-tail.jpg)
 
 ![Illustration of the six features: live presence, model on hover, Incognito, repository button, runs inside Orca, and a small bundle](docs/images/features.jpg)
 
-![Illustration of a whale tail above an Oh My Pi, Idle presence chip](docs/images/whale-tail.jpg)
+![Illustration of the Discord card for an Oh My Pi agent in the orca-discord-rpc folder, with a View Repository button](docs/images/orca-card.jpg)
 
 ## Install
 
