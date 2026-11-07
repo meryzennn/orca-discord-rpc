@@ -27,19 +27,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export function parseWorktreePs(stdout: string): OrcaWorktree[] {
+export function parseWorktreePs(stdout: string): OrcaWorktree[] | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(stdout)
   } catch {
-    return []
+    return null
   }
   if (!isRecord(parsed) || parsed.ok !== true || !isRecord(parsed.result)) {
-    return []
+    return null
   }
   const worktrees = parsed.result.worktrees
   if (!Array.isArray(worktrees)) {
-    return []
+    return null
   }
   return worktrees.filter(isRecord).map((worktree) => ({
     ...worktree,

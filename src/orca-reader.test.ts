@@ -8,6 +8,36 @@ import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { pluginCliEnv, readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
 
+it('returns an empty state for valid empty and all-inactive snapshots', async () => {
+  for (const worktrees of [
+    [],
+    [{ isActive: false, path: '/private/project', branch: 'private-branch',
+      agents: [{ agentType: 'claude', state: 'working' }] }]
+  ]) {
+    const snapshot = async () => JSON.stringify({ ok: true, result: { worktrees } })
+    const state = await readPresenceState(
+      snapshot,
+      async () => { throw new Error('An inactive repository must not be read') },
+      () => { throw new Error('An absent agent must not trigger model lookup') }
+    )
+    assert.deepEqual(state, {
+      projectName: null, agentType: null, model: null,
+      runningAgentCount: 0, agentActive: false, branchName: null, repoUrl: null
+    })
+  }
+})
+
+it('keeps malformed snapshots distinct from empty snapshots and propagates command errors', async () => {
+  for (const stdout of ['not json', '{"ok":false}', '{"ok":true,"result":{}}']) {
+    assert.equal(await readPresenceState(async () => stdout), null)
+  }
+  const failure = new Error('CLI unavailable')
+  await assert.rejects(
+    readPresenceState(async () => { throw failure }),
+    error => error === failure
+  )
+})
+
 it('resolves the active workspace origin on each plugin reading, without resolving absent paths', async () => {
   let origin = 'https://github.com/owner/first'
   const snapshot = (path?: string) => async () => JSON.stringify({ ok: true, result: { worktrees: [
