@@ -8,7 +8,7 @@ const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=2
 const BRANCH_FAVICON = 'https://www.google.com/s2/favicons?domain=git-scm.com&sz=128'
 
 describe('buildActivity (daemon layout)', () => {
-  it('keeps only the application presence when no agent is open', () => {
+  it('keeps the application presence and session timer when no agent is open', () => {
     for (const projectName of [null, 'private-project']) {
       for (const incognito of [false, true]) {
         for (const useUploadedArt of [false, true]) {
@@ -17,7 +17,7 @@ describe('buildActivity (daemon layout)', () => {
             runningAgentCount: 0, agentActive: false,
             branchName: 'private-branch', repoUrl: 'https://github.com/private/repo',
             startedAt, incognito, useUploadedArt
-          }), { details: '', state: '' })
+          }), { details: '', state: '', startTimestamp: startedAt })
         }
       }
     }

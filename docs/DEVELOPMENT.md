@@ -83,10 +83,10 @@ Record results separately for Windows, macOS, and Linux. Automated checks do not
 
 Empty-presence acceptance:
 
-1. Use only one provider. Open Orca with no active workspace, enable RPC, and inspect a Discord profile. Expect Playing Orca with no extra body fields or timer.
+1. Use only one provider. Open Orca with no active workspace, enable RPC, and inspect a Discord profile. Expect Playing Orca with an elapsed timer and no project or agent details.
 2. Open a workspace without agents, including one containing only a plain terminal. Expect the same bare activity in normal and Incognito modes.
 3. Start an agent, let it become idle, then close its pane. Expect the existing rich card, then Idle, then bare Playing Orca. Old project, model, branch, custom artwork and repository data must disappear.
-4. Leave the workspace and return to an agent. Expect the internal session clock to continue; the empty interval itself has no displayed timer.
+4. Note the elapsed time, leave the workspace, then return to an agent. Expect the timer to continue from the same start in every view, including the empty interval.
 5. Restart Discord while Orca remains empty. Expect automatic republishing after reconnect.
 6. Pause RPC while empty. Expect no activity until resumed. Disable the plugin and close Orca in separate checks; each must remove the activity.
 7. Disable the plugin before checking the headless daemon. Start the daemon with Orca open and empty; expect the same bare activity. Close Orca; expect clear. Stop the daemon before re-enabling the plugin.
@@ -115,7 +115,7 @@ The daemon builds its text with the same format definition and agent registry as
 1. Land the change with `npm ci`, `npm test`, `npm run typecheck`, and `npm run build:plugin` passing, and commit the rebuilt `plugin/runtime.mjs`.
 2. Set the same semver `version` in `package.json`, `package-lock.json`, and `orca-plugin.json`.
 3. Tag the commit `vX.Y.Z` and push the tag. Direct Git installs resolve `#vX.Y.Z`, so the tag must contain `orca-plugin.json` and the built `plugin/runtime.mjs`.
-4. Publish a GitHub release. The notes must say how to update: Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z`. The notes for the latest tag are in [release notes](release-notes/v0.2.3.md).
+4. Publish a GitHub release. The notes must say how to update: Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z`. The notes for the latest tag are in [release notes](release-notes/v0.2.4.md).
 5. Land breaking changes on a branch and merge them when you release: `#main` installs track every commit on it.
 
 Legacy Windows exe: its updater reads the repository's latest release, offers any newer tag, and downloads the first `.zip` asset (or `OrcaPresence-windows.zip` for that tag). A release published as latest without that asset makes the old exe's download fail silently. The exe's source is no longer on `main`; it is in the history before commit `2664b2e`. Before publishing a plugin release as latest, either attach a migration build of `OrcaPresence-windows.zip` to it (zip root holds `OrcaPresence.exe` with no wrapper folder) or leave "Set as the latest release" unchecked.

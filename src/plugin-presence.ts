@@ -16,7 +16,7 @@ export function buildPluginActivity(input: PresenceInput): PresenceActivity {
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
   })
-  if (agent === null) return { details: text.details, state: text.state }
+  if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt }
   const activity: PresenceActivity = {
     details: text.details, state: text.state, startTimestamp: input.startedAt,
     largeImageText: FORMAT.brand, ...(uploaded ? { largeImageKey: registry.fallbackIcon.asset } : {})

@@ -52,7 +52,7 @@ export function buildActivity(input: PresenceInput): PresenceActivity {
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
   })
-  if (agent === null) return { details: text.details, state: text.state }
+  if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt }
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback
   // Discord needs one shape per slot: an asset key or a URL, never both.
   const branchArt = uploaded

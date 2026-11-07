@@ -22,7 +22,7 @@ You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged 
 
 1. Open Settings > Plugins in Orca and turn on plugins if needed.
 2. Click Add Plugin and choose a Git source.
-3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.3`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
+3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.4`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
 4. Check that Orca resolves the tag you entered.
 5. Read Orca's worker access prompt, approve it, and enable the plugin.
 
@@ -34,9 +34,9 @@ Run one presence provider at a time. Before you install, stop any older one: the
 
 ## Use
 
-With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows only Playing Orca, with no project, model, custom artwork, button or elapsed timer. Discord may still show its normal application icon. Open an agent to show its details; an idle agent keeps its Idle status. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
+With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows Playing Orca and the continuing elapsed timer, with no project, model, custom artwork or button. Discord may still show its normal application icon. Open an agent to show its details; an idle agent keeps its Idle status. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
 
-The session clock continues internally through the empty view and reappears when an agent opens. Pausing RPC or closing Orca ends that session.
+The same start timestamp is sent in every view, so leaving a workspace or closing the last agent does not reset playtime. Pausing RPC or closing Orca ends that session. Updating or restarting the plugin starts a new session.
 
 The status bar has these controls:
 
@@ -217,7 +217,7 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 
 | Problem | Check |
 | --- | --- |
-| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.3` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
+| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.4` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
 | No activity | Check that Orca and Discord desktop are open, the plugin is enabled, RPC is not paused, and Discord activity visibility is enabled. A workspace or agent is not required. |

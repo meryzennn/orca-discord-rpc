@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test'
+import { describe, it, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPresenceRuntime } from './runtime.ts'
 import type { PresenceState } from './presence-controller.ts'
@@ -6,6 +6,8 @@ import type { PresenceActivity } from './presence.ts'
 import { readPresenceState } from './orca-reader.ts'
 
 it('publishes an empty Orca session while open and clears only when the process closes', async () => {
+  const now = Date.UTC(2026, 10, 8)
+  mock.timers.enable({ apis: ['Date'], now })
   let running = true
   let reads = 0
   let clears = 0
@@ -28,11 +30,12 @@ it('publishes an empty Orca session while open and clears only when the process 
   try {
     await instance.start()
     await instance.start()
-    assert.deepEqual(sent, [{ details: '', state: '' }])
+    assert.deepEqual(sent, [{ details: '', state: '', startTimestamp: new Date(now) }])
     assert.equal(logs.find(line => line.startsWith('pushed:')), 'pushed:  | ')
     assert.equal(clears, 0)
     assert.equal(instance.getStatus().orcaRunning, true)
     const beforeClosing = reads
+    mock.timers.tick(60000)
     running = false
     await instance.start()
     assert.equal(clears, 1)
@@ -40,9 +43,13 @@ it('publishes an empty Orca session while open and clears only when the process 
     assert.equal(instance.getStatus().orcaRunning, false)
     running = true
     await instance.start()
-    assert.deepEqual(sent, [{ details: '', state: '' }, { details: '', state: '' }])
+    assert.deepEqual(sent, [
+      { details: '', state: '', startTimestamp: new Date(now) },
+      { details: '', state: '', startTimestamp: new Date(now + 60000) }
+    ])
   } finally {
     await instance.stop()
+    mock.timers.reset()
   }
 })
 

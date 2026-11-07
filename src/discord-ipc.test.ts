@@ -7,6 +7,9 @@ import { join } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import { createDiscordIpcClient } from './discord-ipc.ts'
 import { createDiscordPresence } from './discord.ts'
+import { createPresenceController, type PresenceState } from './presence-controller.ts'
+import { buildActivity } from './presence.ts'
+import { buildPluginActivity } from './plugin-presence.ts'
 
 type Message = { v?: number; client_id?: string; cmd?: string; evt?: string; nonce?: string;
   args?: { pid: number; activity?: { details?: string; state?: string; timestamps?: { start: number };
@@ -82,7 +85,7 @@ it('handshakes and preserves activity assets, model, buttons, millisecond timer 
   } finally { await presence.destroy(); await server.close() }
 })
 
-it('replaces rich activity with a bare Playing object and only clears on explicit clear', async () => {
+it('omits missing or invalid optional timestamps and only clears on explicit clear', async () => {
   const now = Date.UTC(2026, 10, 8)
   mock.timers.enable({ apis: ['Date'], now })
   const received: Message[] = []
@@ -114,6 +117,54 @@ it('replaces rich activity with a bare Playing object and only clears on explici
     await presence.destroy()
     await server.close()
     mock.timers.reset()
+  }
+})
+
+it('sends the original elapsed timestamp through empty workspace and agent transitions in both layouts', async () => {
+  for (const build of [buildActivity, buildPluginActivity]) {
+    const start = Date.UTC(2026, 10, 8)
+    let time = start
+    const rich: PresenceState = {
+      projectName: 'sample', agentType: 'codex', model: 'test-model',
+      runningAgentCount: 1, agentActive: true, branchName: 'main'
+    }
+    let state = rich
+    const received: Message[] = []
+    const server = await peer((opcode, message, socket) => {
+      received.push(message)
+      socket.write(opcode === 0 ? ready()
+        : frame(1, { cmd: 'SET_ACTIVITY', nonce: message.nonce, data: {} }))
+    })
+    const presence = createDiscordPresence('123',
+      () => createDiscordIpcClient('123', paths(server.path)))
+    const controller = createPresenceController({
+      readState: async () => state, buildActivity: build, now: () => new Date(time),
+      apply: activity => presence.apply(activity), clear: () => presence.clear()
+    })
+    try {
+      for (const next of [
+        rich,
+        { projectName: null, agentType: null, runningAgentCount: 0, agentActive: false, branchName: null },
+        { ...rich, agentType: null, model: null, runningAgentCount: 0, agentActive: false },
+        rich
+      ]) {
+        state = next
+        await controller.poll()
+        time += 300000
+      }
+      const sent = received.filter(message => message.cmd === 'SET_ACTIVITY').map(message => message.args?.activity)
+      assert.deepEqual(sent.map(activity => activity?.timestamps?.start), [start, start, start, start])
+      for (const activity of sent.slice(1, 3)) {
+        assert.ok(activity)
+        assert.equal(activity.details, undefined)
+        assert.equal(activity.state, undefined)
+        assert.equal(activity.assets, undefined)
+        assert.equal(activity.buttons, undefined)
+      }
+    } finally {
+      await presence.destroy()
+      await server.close()
+    }
   }
 })
 

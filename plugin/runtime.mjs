@@ -1269,7 +1269,7 @@ function buildActivity(input) {
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
   });
-  if (agent === null) return { details: text.details, state: text.state };
+  if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback;
   const branchArt = uploaded ? { smallImageKey: registry.branchIcon.asset, smallImageText: branchText } : { smallImageUrl: registry.branchIcon.imageUrl, smallImageText: branchText };
   const image = (uploaded ? agent.asset : null) ?? agent.imageUrl;
@@ -1543,7 +1543,7 @@ function buildPluginActivity(input) {
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
   });
-  if (agent === null) return { details: text.details, state: text.state };
+  if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };
   const activity = {
     details: text.details,
     state: text.state,

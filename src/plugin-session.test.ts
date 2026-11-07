@@ -89,6 +89,7 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
   const now = Date.UTC(2026, 10, 8)
   mock.timers.enable({ apis: ['Date'], now })
   const empty = '{"ok":true,"result":{"worktrees":[]}}'
+  const emptyActivity = { details: '', state: '', startTimestamp: new Date(now) }
   let stdout = empty
   const h = harness({
     incognito: false,
@@ -100,7 +101,7 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
   })
   try {
     await h.session.refresh()
-    assert.deepEqual(h.pushed, [{ details: '', state: '' }])
+    assert.deepEqual(h.pushed, [emptyActivity])
     await h.session.refresh()
     assert.equal(h.pushed.length, 1)
 
@@ -116,18 +117,19 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
     mock.timers.tick(60000)
     stdout = empty
     await h.session.refresh()
-    assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+    assert.deepEqual(h.pushed.at(-1), emptyActivity)
     assert.equal(h.order.filter(operation => operation === 'clear').length, 0)
 
     h.disconnect()
     const beforeReconnect = h.pushed.length
     await h.session.refresh()
     assert.equal(h.pushed.length, beforeReconnect + 1)
+    assert.deepEqual(h.pushed.at(-1), emptyActivity)
     assert.equal(h.statuses.at(-1)?.discordConnected, true)
 
     for (const incognito of [true, false]) {
       await h.session.setIncognito(incognito)
-      assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+      assert.deepEqual(h.pushed.at(-1), emptyActivity)
     }
 
     stdout = JSON.stringify({ ok: true, result: { worktrees: [{
@@ -148,7 +150,9 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
     assert.equal(h.statuses.at(-1)?.paused, true)
     await h.session.setEnabled(true)
     assert.equal(h.pushed.length, pausedCount + 1)
-    assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+    assert.deepEqual(h.pushed.at(-1), {
+      details: '', state: '', startTimestamp: new Date(now + 120000)
+    })
   } finally {
     await h.session.stop()
     mock.timers.reset()
@@ -165,7 +169,10 @@ it('retries an unacknowledged bare activity and respects disabled startup', asyn
     assert.equal(h.pushed.length, 0)
     error = null
     await h.session.refresh()
-    assert.deepEqual(h.pushed, [{ details: '', state: '' }])
+    assert.equal(h.pushed.length, 1)
+    assert.equal(h.pushed[0]?.details, '')
+    assert.equal(h.pushed[0]?.state, '')
+    assert.ok(h.pushed[0]?.startTimestamp instanceof Date)
   } finally {
     await h.session.stop()
   }
