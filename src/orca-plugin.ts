@@ -63,24 +63,21 @@ export function createPluginLifecycle(
         : 'Incognito off: click to hide project and repository.'
     }).catch(report)
   }
-  const updateStatus = (text: string, tooltip: string, tone = 'neutral'): void => {
-    if (!stopping) void orca.host.call('statusBar.update', { id: 'update', text, tooltip, tone }).catch(report)
-  }
-  const requestUpdate = async (): Promise<void> => {
-    if (stopping || updateWork) return
-    updateStatus('Updating RPC', 'Orca is checking the installed Git plugin for updates.')
+  const requestUpdate = async (): Promise<string | undefined> => {
+    if (stopping) return
+    if (updateWork) return 'An RPC update is already running. See Logs below.'
+    orca.log('Checking for RPC updates.')
     // Return before the host command deadline; installation may replace this worker.
     updateWork = Promise.resolve().then(updatePlugin).then(result => {
-      const text = result.status === 'updated' ? 'RPC updated'
-        : result.status === 'up-to-date' ? 'RPC up to date' : 'RPC pinned'
-      const tooltip = result.status === 'pinned'
-        ? 'Version ' + result.version + ' is pinned. Install a version tag or branch to follow updates.'
-        : 'Installed version ' + result.version + '. Click to check again.'
-      updateStatus(text, tooltip)
+      if (stopping) return
+      const message = result.status === 'updated' ? 'Updated RPC to version ' + result.version + '.'
+        : result.status === 'up-to-date' ? 'RPC is up to date (version ' + result.version + ').'
+          : 'RPC version ' + result.version + ' is pinned. Install a version tag or branch to follow updates.'
+      orca.log(message)
     }).catch(error => {
-      report(error)
-      updateStatus('Update error', error instanceof Error ? error.message : String(error), 'warning')
+      if (!stopping) report(error)
     }).finally(() => { updateWork = null })
+    return 'Checking for RPC updates. See Logs below.'
   }
   const deactivate = (): Promise<void> => {
     if (shutdown) return shutdown

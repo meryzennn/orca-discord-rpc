@@ -4,7 +4,7 @@
   "execution": "trusted-worker",
   "id": "discord-presence",
   "name": "Discord Rich Presence",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Keep Orca visible on Discord, with workspace and agent details when an agent is open.",
   "license": "MIT",
   "repository": "https://github.com/meryzennn/orca-discord-rpc",
@@ -29,9 +29,6 @@
     }, {
       "id": "incognito", "text": "Incognito Off",
       "tooltip": "Click to hide project and repository details", "command": "presence.incognito.toggle"
-    }, {
-      "id": "update", "text": "Update RPC", "icon": "download",
-      "tooltip": "Update the installed Git plugin using Orca 1.4.253 or newer", "command": "presence.update"
     }],
     "events": [{ "on": "workspace.changed" }, { "on": "agent.status.changed" }],
     "settings": [

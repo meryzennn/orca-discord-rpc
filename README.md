@@ -22,7 +22,7 @@ You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged 
 
 1. Open Settings > Plugins in Orca and turn on plugins if needed.
 2. Click Add Plugin and choose a Git source.
-3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.0`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
+3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.1`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
 4. Check that Orca resolves the tag you entered.
 5. Read Orca's worker access prompt, approve it, and enable the plugin.
 
@@ -46,10 +46,6 @@ The status bar has these controls:
 | `RPC paused` | Click to resume. |
 | `RPC waiting` | Discord is unavailable or the last update failed. Hover for the reason. |
 | `Incognito On` / `Incognito Off` | Click to change privacy without opening Settings. |
-| `Update RPC` | Check and update the installed Git plugin using Orca 1.4.253 or newer. |
-| `Updating RPC` | The update request is running. Presence and its controls stay available. |
-| `RPC up to date` / `RPC updated` / `RPC pinned` | The updater's result. Hover for the version or next step; click to check again. |
-| `Update error` | Hover for the reason, such as an older Orca version or an update needing review. |
 
 Incognito replaces your folder with `Private Project` and hides the repository button. Your agent and model stay visible. If you change Incognito while paused, presence stays paused and the new setting applies when you resume.
 
@@ -109,15 +105,19 @@ stateDiagram-v2
   Paused: RPC paused
 ```
 
-Presence updates use the local connection to Discord. Clicking Update RPC asks Orca's updater and Git to contact the plugin's source repository; the plugin does not download or replace its own files.
+Presence updates use the local connection to Discord. Running the update command from the plugin page asks Orca's updater and Git to contact the plugin's source repository; the plugin does not download or replace its own files.
 
 ## Updates
 
-Starting with v0.3.0, click **Update RPC** in the status bar or run **Discord RPC: Update installed plugin** from the command palette. This requires the **Orca application 1.4.253 or newer**. Presence still works on Orca 1.4.250, but its update button explains that the application needs upgrading.
+Open **Settings > Plugins > Discord Rich Presence**, find **Discord RPC: Update installed plugin**, and click its **Run** button. The command confirms that checking has started; progress and results appear in **Logs** on the same page. The status bar only contains RPC and Incognito controls. The command is also available from the command palette.
 
-The button runs Orca's updater for the published Git installation, `meryzennn.discord-presence`. A version-tag installation follows the newest version tag; a branch installation follows its newest commit. A commit pin stays pinned. Development folders keep their own source and must be removed or disabled before using the Git installation.
+A successful installation can restart the worker before its final log is written. Confirm the installed version on the plugin page in that case.
 
-Install v0.3.0 once through Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.0` to get the button. You do not need to uninstall the same Git plugin first. Review the new update command when Orca asks. Future updates with the same access keep their approval; updates requesting new access wait for review in Settings > Plugins. The button never approves extra access for you.
+Updating requires the **Orca application 1.4.253 or newer**. Presence still works on Orca 1.4.250; an update attempt there explains the application upgrade requirement in Logs.
+
+The command runs Orca's updater for the published Git installation, `meryzennn.discord-presence`. A version-tag installation follows the newest version tag; a branch installation follows its newest commit. A commit pin stays pinned. Development folders keep their own source and must be removed or disabled before using the Git installation.
+
+Install v0.3.1 through Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.1`. You do not need to uninstall the same Git plugin first. Review the update command when Orca asks. Future updates with the same access keep their approval; updates requesting new access wait for review in Settings > Plugins. The command never approves extra access for you.
 
 An installed update restarts the worker and starts a new elapsed session. An up-to-date check or a refused update leaves the running presence alone. Checks happen when you click; this plugin does not poll for updates or install them in the background. Orca's automatic update policy applies to pinned catalog releases, which this direct Git installation does not use.
 
@@ -223,7 +223,7 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 
 | Problem | Check |
 | --- | --- |
-| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.3.0` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
+| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.3.1` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
 | No activity | Check that Orca and Discord desktop are open, the plugin is enabled, RPC is not paused, and Discord activity visibility is enabled. A workspace or agent is not required. |

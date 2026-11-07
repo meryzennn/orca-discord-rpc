@@ -63,7 +63,7 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
   const logs: string[] = []
   const statuses: Record<string, string>[] = []
   const privacyStatuses: Record<string, string>[] = []
-  const updateStatuses: Record<string, string>[] = []
+  const statusBarCalls: Record<string, string>[] = []
   const activities: PresenceActivity[] = []
   const order: string[] = []
   let signal: AbortSignal | null = null
@@ -89,8 +89,9 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
     } },
     host: { call: async (method, params) => {
       assert.equal(method, 'statusBar.update')
-      assert.ok(params.id === 'presence' || params.id === 'incognito' || params.id === 'update')
-      const updates = params.id === 'presence' ? statuses : params.id === 'incognito' ? privacyStatuses : updateStatuses
+      statusBarCalls.push(params)
+      assert.ok(params.id === 'presence' || params.id === 'incognito')
+      const updates = params.id === 'presence' ? statuses : privacyStatuses
       updates.push(params)
     } }
   }
@@ -117,7 +118,7 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
     })
   }, updatePlugin)
   return {
-    lifecycle, commands, events, changes, reads, writes, logs, statuses, privacyStatuses, updateStatuses, activities, order,
+    lifecycle, commands, events, changes, reads, writes, logs, statuses, privacyStatuses, statusBarCalls, activities, order,
     stateReads: () => stateReads, signal: () => signal,
     setGet: (handler: typeof get) => { get = handler },
     publishStatus: (status: PresenceRuntimeStatus) => publishStatus?.(status),
@@ -125,16 +126,14 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
   }
 }
 
-it('declares an update button backed by a registered worker command', async () => {
+it('exposes update as a plugin-page command while keeping only presence and privacy in the status bar', async () => {
   const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
-  const button = manifest.contributes.statusBarItems.find((entry: { id: string }) => entry.id === 'update')
-  assert.ok(button)
-  assert.equal(button.command, 'presence.update')
-  assert.ok(manifest.contributes.commands.some((entry: { id: string }) => entry.id === button.command))
+  assert.deepEqual(manifest.contributes.statusBarItems.map((entry: { id: string }) => entry.id), ['presence', 'incognito'])
+  assert.ok(manifest.contributes.commands.some((entry: { id: string }) => entry.id === 'presence.update'))
   const h = harness()
   try {
     await h.lifecycle.activate()
-    assert.ok(h.commands.has(button.command))
+    assert.ok(h.commands.has('presence.update'))
   } finally { await h.lifecycle.deactivate() }
 })
 
@@ -148,18 +147,20 @@ it('starts updates only on click and coalesces clicks without blocking the comma
     const command = h.commands.get('presence.update')
     assert.ok(command)
     let returned = false
-    void command().then(() => { returned = true })
+    let result: unknown
+    void command().then(value => { result = value; returned = true })
     await setImmediate()
     assert.equal(returned, true)
-    await command()
+    assert.equal(result, 'Checking for RPC updates. See Logs below.')
+    assert.equal(await command(), 'An RPC update is already running. See Logs below.')
     assert.equal(calls, 1)
-    assert.equal(h.updateStatuses.at(-1)?.text, 'Updating RPC')
+    assert.ok(h.logs.includes('Checking for RPC updates.'))
     assert.equal(h.activities.length, 0)
     assert.deepEqual(h.writes, [])
     gate.resolve({ status: 'up-to-date', version: '0.2.4' })
     await setImmediate()
-    assert.equal(h.updateStatuses.at(-1)?.text, 'RPC up to date')
-    assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('0.2.4'))
+    assert.ok(h.logs.includes('RPC is up to date (version 0.2.4).'))
+    assert.ok(h.statusBarCalls.every(call => call.id !== 'update'))
   } finally {
     gate.resolve({ status: 'up-to-date', version: '0.2.4' })
     await h.lifecycle.deactivate()
@@ -177,47 +178,60 @@ it('shows update errors without stopping presence and permits another attempt', 
     await setImmediate()
     await h.commands.get('presence.update')!()
     await setImmediate()
-    assert.equal(h.updateStatuses.at(-1)?.text, 'Update error')
-    assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('1.4.253'))
     assert.ok(h.logs.some(line => line.includes('1.4.253')))
     assert.equal(h.order.includes('clear'), false)
     assert.ok(h.activities.length > 0)
     fail = false
     await h.commands.get('presence.update')!()
     await setImmediate()
-    assert.equal(h.updateStatuses.at(-1)?.text, 'RPC up to date')
+    assert.ok(h.logs.includes('RPC is up to date (version 0.2.4).'))
+    assert.ok(h.statusBarCalls.every(call => call.id !== 'update'))
   } finally { await h.lifecycle.deactivate() }
 })
 
-it('does not wait for a self-update during shutdown or send late status updates', async () => {
-  const gate = deferred<{ status: 'up-to-date'; version: string }>()
-  const h = harness({}, null, undefined, () => gate.promise)
-  await h.lifecycle.activate()
-  const command = h.commands.get('presence.update')!
-  await command()
-  let stopped = false
-  const shutdown = h.lifecycle.deactivate().then(() => { stopped = true })
-  await setImmediate()
-  gate.resolve({ status: 'up-to-date', version: '0.2.4' })
-  assert.equal(stopped, true)
-  await shutdown
-  const count = h.updateStatuses.length
-  await setImmediate()
-  assert.equal(h.updateStatuses.length, count)
-  await command()
-  assert.equal(h.updateStatuses.length, count)
-  assert.equal(h.commands.size, 0)
+it('does not wait for a self-update during shutdown or log late results', async () => {
+  for (const fail of [false, true]) {
+    const gate = deferred<{ status: 'up-to-date'; version: string }>()
+    const h = harness({}, null, undefined, async () => {
+      const result = await gate.promise
+      if (fail) throw new Error('late update error')
+      return result
+    })
+    try {
+      await h.lifecycle.activate()
+      const command = h.commands.get('presence.update')!
+      await command()
+      let stopped = false
+      const shutdown = h.lifecycle.deactivate().then(() => { stopped = true })
+      await setImmediate()
+      assert.equal(stopped, true)
+      await shutdown
+      const count = h.logs.length
+      gate.resolve({ status: 'up-to-date', version: '0.2.4' })
+      await setImmediate()
+      assert.equal(h.logs.length, count)
+      await command()
+      assert.equal(h.logs.length, count)
+      assert.equal(h.commands.size, 0)
+    } finally {
+      gate.resolve({ status: 'up-to-date', version: '0.2.4' })
+      await h.lifecycle.deactivate()
+    }
+  }
 })
 
-it('shows updated and pinned outcomes from Orca', async () => {
-  for (const [status, text] of [['updated', 'RPC updated'], ['pinned', 'RPC pinned']] as const) {
+it('logs updated and pinned outcomes without creating status bar controls', async () => {
+  for (const [status, text] of [
+    ['updated', 'Updated RPC to version 0.3.0.'],
+    ['pinned', 'RPC version 0.3.0 is pinned. Install a version tag or branch to follow updates.']
+  ] as const) {
     const h = harness({}, null, undefined, async () => ({ status, version: '0.3.0' }))
     try {
       await h.lifecycle.activate()
       await h.commands.get('presence.update')!()
       await setImmediate()
-      assert.equal(h.updateStatuses.at(-1)?.text, text)
-      assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('0.3.0'))
+      assert.ok(h.logs.includes(text))
+      assert.ok(h.statusBarCalls.every(call => call.id !== 'update'))
     } finally { await h.lifecycle.deactivate() }
   }
 })
