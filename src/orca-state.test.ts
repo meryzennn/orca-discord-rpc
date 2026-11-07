@@ -18,12 +18,20 @@ function envelope(worktrees: unknown[]): string {
 describe('parseWorktreePs', () => {
   it('reads the worktree list out of the CLI envelope', () => {
     const parsed = parseWorktreePs(envelope([{ worktreeId: 'wt-a' }]))
+    assert.ok(parsed)
     assert.equal(parsed.length, 1)
   })
 
-  it('returns an empty list for a malformed envelope', () => {
-    assert.deepEqual(parseWorktreePs('not json'), [])
-    assert.deepEqual(parseWorktreePs(JSON.stringify({ ok: false })), [])
+  it('distinguishes a valid empty list from an invalid envelope', () => {
+    assert.deepEqual(parseWorktreePs(envelope([])), [])
+    for (const stdout of [
+      'not json', 'null', '[]', '{}',
+      JSON.stringify({ ok: false }),
+      JSON.stringify({ ok: true, result: null }),
+      JSON.stringify({ ok: true, result: { worktrees: {} } })
+    ]) {
+      assert.equal(parseWorktreePs(stdout), null)
+    }
   })
 })
 
@@ -35,11 +43,14 @@ describe('selectActiveWorktree', () => {
         { worktreeId: 'b', isActive: true }
       ])
     )
+    assert.ok(parsed)
     assert.equal(selectActiveWorktree(parsed)?.worktreeId, 'b')
   })
 
   it('returns null when none is active', () => {
-    assert.equal(selectActiveWorktree(parseWorktreePs(envelope([{ worktreeId: 'a' }]))), null)
+    const parsed = parseWorktreePs(envelope([{ worktreeId: 'a' }]))
+    assert.ok(parsed)
+    assert.equal(selectActiveWorktree(parsed), null)
   })
 })
 

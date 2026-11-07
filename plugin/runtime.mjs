@@ -66,14 +66,14 @@ function activityPayload(input) {
     ["small_image", input.smallImageKey || input.smallImageUrl],
     ["small_text", input.smallImageText]
   ]) if (key && value) assets[key] = value;
-  const start = input.startTimestamp.getTime();
+  const start = input.startTimestamp?.getTime();
   return {
     type: 0,
     created_at: Date.now(),
     instance: false,
     ...input.details ? { details: input.details } : {},
     ...input.state ? { state: input.state } : {},
-    ...Number.isFinite(start) ? { timestamps: { start } } : {},
+    ...start !== void 0 && Number.isFinite(start) ? { timestamps: { start } } : {},
     ...Object.keys(assets).length ? { assets } : {},
     ...input.buttons?.length ? { buttons: input.buttons } : {}
   };
@@ -997,14 +997,14 @@ function parseWorktreePs(stdout) {
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    return [];
+    return null;
   }
   if (!isRecord2(parsed) || parsed.ok !== true || !isRecord2(parsed.result)) {
-    return [];
+    return null;
   }
   const worktrees = parsed.result.worktrees;
   if (!Array.isArray(worktrees)) {
-    return [];
+    return null;
   }
   return worktrees.filter(isRecord2).map((worktree) => ({
     ...worktree,
@@ -1136,21 +1136,20 @@ ${diagnostics.join("\n")}`;
 }
 async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoUrl, findModel = findAgentModel) {
   const worktrees = parseWorktreePs(await runWorktreePs());
+  if (worktrees === null) return null;
   const active = selectActiveWorktree(worktrees);
-  if (!active) {
-    return null;
-  }
+  const path = typeof active?.path === "string" ? active.path : null;
   const featured = featuredAgent(active);
   const agentType = typeof featured?.agentType === "string" ? featured.agentType : null;
   return {
     projectName: projectNameFor(active),
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
-    model: findModel(agentType, typeof active.path === "string" ? active.path : null),
+    model: agentType === null ? null : findModel(agentType, path),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
-    ...resolveRepoUrl ? { repoUrl: typeof active.path === "string" && active.path.length > 0 ? await resolveRepoUrl(active.path) : null } : {}
+    ...resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {}
   };
 }
 
@@ -1207,11 +1206,11 @@ function readRepoUrl(directory, signal) {
 // config/presence-format.json
 var presence_format_default = {
   brand: "Orca",
-  noAgentTitle: "Using Orca",
+  noAgentTitle: "",
+  noAgentState: "",
   folderPrefix: "\u{1F4C1} ",
   separator: " \xB7 ",
   othersMarker: "+",
-  agentsWord: "agents",
   working: "Working",
   idle: "Idle",
   privateProject: "Private Project",
@@ -1241,18 +1240,12 @@ function field(value) {
   return value.length >= FIELD_MIN ? value : "";
 }
 function composeText(input) {
+  if (input.agentName === null) {
+    return { details: FORMAT.noAgentTitle, state: FORMAT.noAgentState, iconText: "" };
+  }
   const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0;
   const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName));
   const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, FOLDER_LIMIT) : "";
-  if (input.agentName === null) {
-    const agents = `${count} ${FORMAT.agentsWord}`;
-    const others = count > 1 ? `${FORMAT.separator}${agents}` : "";
-    return {
-      details: FORMAT.noAgentTitle,
-      state: folderLine ? `${folderLine}${others}` : count > 1 ? agents : FORMAT.brand,
-      iconText: ""
-    };
-  }
   const status = input.agentActive === false ? FORMAT.idle : FORMAT.working;
   const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT));
   const suffix = `${count > 1 ? ` ${FORMAT.othersMarker}${count - 1}` : ""}${FORMAT.separator}${status}`;
@@ -1276,18 +1269,9 @@ function buildActivity(input) {
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
   });
+  if (agent === null) return { details: text.details, state: text.state };
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback;
   const branchArt = uploaded ? { smallImageKey: registry.branchIcon.asset, smallImageText: branchText } : { smallImageUrl: registry.branchIcon.imageUrl, smallImageText: branchText };
-  if (agent === null) {
-    return {
-      details: text.details,
-      state: text.state,
-      startTimestamp: input.startedAt,
-      largeImageKey: registry.fallbackIcon.asset,
-      largeImageText: FORMAT.brand,
-      ...branchArt
-    };
-  }
   const image = (uploaded ? agent.asset : null) ?? agent.imageUrl;
   const agentArt = uploaded ? { largeImageKey: image ?? registry.fallbackIcon.asset, largeImageText: text.iconText } : image !== null ? { largeImageUrl: image, largeImageText: text.iconText } : { largeImageKey: registry.fallbackIcon.asset, largeImageText: text.iconText };
   return {
@@ -1559,6 +1543,7 @@ function buildPluginActivity(input) {
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
   });
+  if (agent === null) return { details: text.details, state: text.state };
   const activity = {
     details: text.details,
     state: text.state,
@@ -1566,13 +1551,11 @@ function buildPluginActivity(input) {
     largeImageText: FORMAT.brand,
     ...uploaded ? { largeImageKey: registry.fallbackIcon.asset } : {}
   };
-  if (agent !== null) {
-    if (uploaded && agent.asset) activity.smallImageKey = agent.asset;
-    else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl;
-    else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset;
-    else activity.smallImageUrl = registry.fallbackIcon.imageUrl;
-    activity.smallImageText = text.iconText;
-  }
+  if (uploaded && agent.asset) activity.smallImageKey = agent.asset;
+  else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl;
+  else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset;
+  else activity.smallImageUrl = registry.fallbackIcon.imageUrl;
+  activity.smallImageText = text.iconText;
   if (!input.incognito) {
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl);
     if (repoUrl) activity.buttons = [{ label: FORMAT.repositoryButton, url: repoUrl }];

@@ -16,18 +16,17 @@ export function buildPluginActivity(input: PresenceInput): PresenceActivity {
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
   })
+  if (agent === null) return { details: text.details, state: text.state }
   const activity: PresenceActivity = {
     details: text.details, state: text.state, startTimestamp: input.startedAt,
     largeImageText: FORMAT.brand, ...(uploaded ? { largeImageKey: registry.fallbackIcon.asset } : {})
   }
-  if (agent !== null) {
-    // An agent with no artwork of its own gets the fallback icon rather than an empty slot.
-    if (uploaded && agent.asset) activity.smallImageKey = agent.asset
-    else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl
-    else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset
-    else activity.smallImageUrl = registry.fallbackIcon.imageUrl
-    activity.smallImageText = text.iconText
-  }
+  // An agent with no artwork of its own gets the fallback icon rather than an empty slot.
+  if (uploaded && agent.asset) activity.smallImageKey = agent.asset
+  else if (agent.imageUrl) activity.smallImageUrl = agent.imageUrl
+  else if (uploaded) activity.smallImageKey = registry.fallbackIcon.asset
+  else activity.smallImageUrl = registry.fallbackIcon.imageUrl
+  activity.smallImageText = text.iconText
   if (!input.incognito) {
     const repoUrl = sanitizeRepoWebUrl(input.repoUrl)
     if (repoUrl) activity.buttons = [{ label: FORMAT.repositoryButton, url: repoUrl }]

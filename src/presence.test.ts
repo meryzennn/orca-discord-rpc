@@ -8,19 +8,19 @@ const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=2
 const BRANCH_FAVICON = 'https://www.google.com/s2/favicons?domain=git-scm.com&sz=128'
 
 describe('buildActivity (daemon layout)', () => {
-  it('shows Orca alone when nothing is running', () => {
-    const activity = buildActivity({ projectName: null, agentType: null, runningAgentCount: 0, startedAt })
-    assert.equal(activity.details, 'Using Orca')
-    assert.equal(activity.state, 'Orca')
-    assert.equal(activity.startTimestamp, startedAt)
-    assert.equal(activity.largeImageKey, 'orca')
-    assert.equal(activity.largeImageUrl, undefined)
-  })
-
-  it('keeps the folder and counts agents when no agent is featured', () => {
-    const activity = buildActivity({ projectName: 'orca', agentType: null, runningAgentCount: 0, agentActive: false, startedAt })
-    assert.equal(activity.details, 'Using Orca')
-    assert.equal(activity.state, '📁 orca')
+  it('keeps only the application presence when no agent is open', () => {
+    for (const projectName of [null, 'private-project']) {
+      for (const incognito of [false, true]) {
+        for (const useUploadedArt of [false, true]) {
+          assert.deepEqual(buildActivity({
+            projectName, agentType: null, model: 'private-model',
+            runningAgentCount: 0, agentActive: false,
+            branchName: 'private-branch', repoUrl: 'https://github.com/private/repo',
+            startedAt, incognito, useUploadedArt
+          }), { details: '', state: '' })
+        }
+      }
+    }
   })
 
   it('names the agent and its status on line 1 and the folder on line 2', () => {
@@ -91,7 +91,7 @@ describe('buildActivity (daemon layout)', () => {
   })
 
   it('collapses whitespace and control characters in a project name', () => {
-    const activity = buildActivity({ projectName: 'my  project\n\ttwo', agentType: null, runningAgentCount: 0, startedAt })
+    const activity = buildActivity({ projectName: 'my  project\n\ttwo', agentType: 'claude', runningAgentCount: 1, startedAt })
     assert.equal(activity.state, '📁 my project two')
   })
 

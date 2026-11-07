@@ -82,6 +82,41 @@ it('handshakes and preserves activity assets, model, buttons, millisecond timer 
   } finally { await presence.destroy(); await server.close() }
 })
 
+it('replaces rich activity with a bare Playing object and only clears on explicit clear', async () => {
+  const now = Date.UTC(2026, 10, 8)
+  mock.timers.enable({ apis: ['Date'], now })
+  const received: Message[] = []
+  const server = await peer((opcode, message, socket) => {
+    received.push(message)
+    socket.write(opcode === 0 ? ready()
+      : frame(1, { cmd: 'SET_ACTIVITY', nonce: message.nonce, data: {} }))
+  })
+  const presence = createDiscordPresence('123',
+    () => createDiscordIpcClient('123', paths(server.path)))
+  try {
+    assert.equal(await presence.apply(activity), true)
+    assert.equal(await presence.apply({ details: '', state: '' }), true)
+    assert.equal(presence.isConnected(), true)
+    assert.deepEqual(received.at(-1)?.args?.activity, {
+      type: 0, created_at: now, instance: false
+    })
+    assert.equal(await presence.apply({
+      details: '', state: '', startTimestamp: new Date(Number.NaN)
+    }), true)
+    assert.deepEqual(received.at(-1)?.args?.activity, {
+      type: 0, created_at: now, instance: false
+    })
+    assert.equal(received.filter(message => message.client_id).length, 1)
+    assert.equal(await presence.clear(), true)
+    assert.equal(received.at(-1)?.args?.activity, null)
+    assert.equal(presence.isConnected(), false)
+  } finally {
+    await presence.destroy()
+    await server.close()
+    mock.timers.reset()
+  }
+})
+
 it('counts UTF-8 bytes in the frame header so emoji and CJK text arrive intact', async () => {
   const received: Message[] = []
   const server = await peer((opcode, message, socket) => {

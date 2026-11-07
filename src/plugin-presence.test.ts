@@ -41,11 +41,18 @@ describe('card layout', () => {
     assert.equal(buildPluginActivity({ ...base, projectName: 'x', agentActive: false }).state, 'Idle')
   })
 
-  it('has Orca, folder and count fallbacks when no agent is open', () => {
-    assert.equal(buildPluginActivity({ ...base, agentType: null }).details, 'Using Orca')
-    assert.equal(buildPluginActivity({ ...base, agentType: null }).state, '📁 sample · 2 agents')
-    assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null }).state, '2 agents')
-    assert.equal(buildPluginActivity({ ...base, agentType: null, projectName: null, runningAgentCount: 0 }).state, 'Orca')
+  it('keeps only the application presence when no agent is open', () => {
+    for (const projectName of [null, 'private-project']) {
+      for (const incognito of [false, true]) {
+        for (const useUploadedArt of [false, true]) {
+          assert.deepEqual(buildPluginActivity({
+            ...base, projectName, agentType: null, model: 'private-model',
+            branchName: 'private-branch', repoUrl: 'https://github.com/private/repo',
+            incognito, useUploadedArt
+          }), { details: '', state: '' })
+        }
+      }
+    }
   })
 
   it('normalizes whitespace in a folder name', () => {

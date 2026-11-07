@@ -70,21 +70,19 @@ export async function readPresenceState(
   findModel: (agentType: string | null, worktreePath: string | null) => string | null = findAgentModel
 ): Promise<PresenceState | null> {
   const worktrees = parseWorktreePs(await runWorktreePs())
+  if (worktrees === null) return null
   const active = selectActiveWorktree(worktrees)
-  if (!active) {
-    return null
-  }
+  const path = typeof active?.path === 'string' ? active.path : null
   const featured = featuredAgent(active)
   const agentType = typeof featured?.agentType === 'string' ? featured.agentType : null
   return {
     projectName: projectNameFor(active),
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
-    model: findModel(agentType, typeof active.path === 'string' ? active.path : null),
+    model: agentType === null ? null : findModel(agentType, path),
     runningAgentCount: runningAgentCount(active),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
-    ...(resolveRepoUrl ? { repoUrl: typeof active.path === 'string' && active.path.length > 0
-      ? await resolveRepoUrl(active.path) : null } : {})
+    ...(resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {})
   }
 }

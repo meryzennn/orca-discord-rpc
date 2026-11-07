@@ -1,10 +1,10 @@
 {
   "brand": "Orca",
-  "noAgentTitle": "Using Orca",
+  "noAgentTitle": "",
+  "noAgentState": "",
   "folderPrefix": "📁 ",
   "separator": " · ",
   "othersMarker": "+",
-  "agentsWord": "agents",
   "working": "Working",
   "idle": "Idle",
   "privateProject": "Private Project",

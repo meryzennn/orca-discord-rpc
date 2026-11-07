@@ -60,20 +60,13 @@ export type PresenceText = {
 }
 
 export function composeText(input: TextInput): PresenceText {
+  if (input.agentName === null) {
+    return { details: FORMAT.noAgentTitle, state: FORMAT.noAgentState, iconText: '' }
+  }
   const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0
   // Why field(): a one-character name is dropped, as before the folder prefix existed.
   const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName))
   const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, FOLDER_LIMIT) : ''
-
-  if (input.agentName === null) {
-    const agents = `${count} ${FORMAT.agentsWord}`
-    const others = count > 1 ? `${FORMAT.separator}${agents}` : ''
-    return {
-      details: FORMAT.noAgentTitle,
-      state: folderLine ? `${folderLine}${others}` : count > 1 ? agents : FORMAT.brand,
-      iconText: ''
-    }
-  }
 
   const status = input.agentActive === false ? FORMAT.idle : FORMAT.working
   const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT))

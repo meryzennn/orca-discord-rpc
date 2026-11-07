@@ -7,6 +7,7 @@ import type { PresenceActivity } from './presence.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
 import { createPluginSession } from './plugin-session.ts'
 import { createDiscordPresence } from './discord.ts'
+import { readPresenceState } from './orca-reader.ts'
 
 const state: PresenceState = {
   projectName: 'secret-project', agentType: 'omp', runningAgentCount: 1,
@@ -84,6 +85,99 @@ function harness(options: {
   }
 }
 
+it('keeps empty sessions alive across agent transitions, privacy, reconnect and pause', async () => {
+  const now = Date.UTC(2026, 10, 8)
+  mock.timers.enable({ apis: ['Date'], now })
+  const empty = '{"ok":true,"result":{"worktrees":[]}}'
+  let stdout = empty
+  const h = harness({
+    incognito: false,
+    readState: () => readPresenceState(
+      async () => stdout,
+      async () => 'https://github.com/private/repo',
+      () => 'test-model'
+    )
+  })
+  try {
+    await h.session.refresh()
+    assert.deepEqual(h.pushed, [{ details: '', state: '' }])
+    await h.session.refresh()
+    assert.equal(h.pushed.length, 1)
+
+    mock.timers.tick(60000)
+    stdout = JSON.stringify({ ok: true, result: { worktrees: [{
+      isActive: true, path: '/private/project', branch: 'private-branch',
+      agents: [{ agentType: 'claude', state: 'working' }]
+    }] } })
+    await h.session.refresh()
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), now)
+    assert.equal(h.pushed.at(-1)?.state, '📁 project')
+
+    mock.timers.tick(60000)
+    stdout = empty
+    await h.session.refresh()
+    assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+    assert.equal(h.order.filter(operation => operation === 'clear').length, 0)
+
+    h.disconnect()
+    const beforeReconnect = h.pushed.length
+    await h.session.refresh()
+    assert.equal(h.pushed.length, beforeReconnect + 1)
+    assert.equal(h.statuses.at(-1)?.discordConnected, true)
+
+    for (const incognito of [true, false]) {
+      await h.session.setIncognito(incognito)
+      assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+    }
+
+    stdout = JSON.stringify({ ok: true, result: { worktrees: [{
+      isActive: true, path: '/private/project',
+      agents: [{ agentType: 'claude', state: 'done' }]
+    }] } })
+    await h.session.refresh()
+    assert.equal(h.pushed.at(-1)?.details, 'Claude · Idle')
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), now)
+
+    stdout = empty
+    await h.session.refresh()
+    await h.session.setEnabled(false)
+    const pausedCount = h.pushed.length
+    h.tick()
+    await h.session.refresh()
+    assert.equal(h.pushed.length, pausedCount)
+    assert.equal(h.statuses.at(-1)?.paused, true)
+    await h.session.setEnabled(true)
+    assert.equal(h.pushed.length, pausedCount + 1)
+    assert.deepEqual(h.pushed.at(-1), { details: '', state: '' })
+  } finally {
+    await h.session.stop()
+    mock.timers.reset()
+  }
+  assert.deepEqual(h.order.slice(-2), ['clear', 'destroy'])
+})
+
+it('retries an unacknowledged bare activity and respects disabled startup', async () => {
+  let error: string | null = 'temporarily unavailable'
+  const readState = () => readPresenceState(async () => '{"ok":true,"result":{"worktrees":[]}}')
+  const h = harness({ readState, transportError: () => error })
+  try {
+    await h.session.refresh()
+    assert.equal(h.pushed.length, 0)
+    error = null
+    await h.session.refresh()
+    assert.deepEqual(h.pushed, [{ details: '', state: '' }])
+  } finally {
+    await h.session.stop()
+  }
+  const disabled = harness({ enabled: false, readState })
+  try {
+    await disabled.session.refresh()
+    assert.equal(disabled.pushed.length, 0)
+  } finally {
+    await disabled.session.stop()
+  }
+})
+
 it('redacts private state before the reused builder and clears before changing privacy', async () => {
   const h = harness()
   await h.session.refresh()
@@ -108,26 +202,26 @@ it('preserves the Playing session timer when toggling Incognito in either direct
   const h = harness({ incognito: false })
   try {
     await h.session.refresh()
-    const started = h.pushed[0]!.startTimestamp.getTime()
+    const started = h.pushed[0]!.startTimestamp!.getTime()
     mock.timers.tick(60000)
     await h.session.setIncognito(true)
     assert.equal(h.pushed.at(-1)?.state, '📁 Private Project')
-    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     mock.timers.tick(60000)
     await h.session.setIncognito(false)
     assert.equal(h.pushed.at(-1)?.state, '📁 secret-project')
-    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
   } finally { await h.session.stop(); mock.timers.reset() }
 })
 
-it('starts a new session timer after the workspace disappears, including in Incognito', async () => {
+it('starts a new session timer after an explicit null clear, including in Incognito', async () => {
   mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 7, 0, 0, 0) })
   let current: PresenceState | null = state
   const h = harness({ incognito: false, readState: async () => current })
   try {
     await h.session.refresh()
-    const started = h.pushed[0]!.startTimestamp.getTime()
+    const started = h.pushed[0]!.startTimestamp!.getTime()
     mock.timers.tick(60000)
     current = null
     await h.session.refresh()
@@ -136,7 +230,7 @@ it('starts a new session timer after the workspace disappears, including in Inco
     mock.timers.tick(60000)
     await h.session.refresh()
     assert.equal(h.pushed.at(-1)?.state, '📁 Private Project')
-    assert.ok(h.pushed.at(-1)!.startTimestamp.getTime() > started)
+    assert.ok(h.pushed.at(-1)!.startTimestamp!.getTime() > started)
   } finally { await h.session.stop(); mock.timers.reset() }
 })
 
@@ -356,7 +450,7 @@ it('reuses deduplication and reconnect retry without overlapping polls', async (
   await h.session.stop()
 })
 
-it('clears absent workspaces and retries a failed read on the next refresh', async () => {
+it('clears null readings and retries a failed read on the next refresh', async () => {
   let reads = 0
   const h = harness({ readState: async () => {
     reads += 1

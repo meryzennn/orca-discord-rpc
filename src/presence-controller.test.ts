@@ -8,7 +8,7 @@ const T0 = new Date('2026-10-05T00:00:00.000Z')
 const T1 = new Date('2026-10-05T00:01:00.000Z')
 
 function harness(initialState: PresenceState | null) {
-  const applied: { details: string; state: string; startTimestamp: Date }[] = []
+  const applied: PresenceActivity[] = []
   let cleared = 0
   let state = initialState
   let now = T0
@@ -160,14 +160,14 @@ describe('createPresenceController', () => {
     assert.equal(h.applied[1]?.startTimestamp, T0)
   })
 
-  it('clears when no worktree is active', async () => {
+  it('clears when the reader reports no publishable state', async () => {
     const h = harness(null)
     await h.controller.poll()
     assert.equal(h.cleared(), 1)
     assert.equal(h.applied.length, 0)
   })
 
-  it('does not clear repeatedly while nothing is active', async () => {
+  it('does not clear repeatedly for a null reading', async () => {
     const h = harness(null)
     await h.controller.poll()
     await h.controller.poll()

@@ -81,6 +81,18 @@ Record results separately for Windows, macOS, and Linux. Automated checks do not
 11. Check the card in Discord desktop and mobile: the `📁` line, status on line 1 in a narrow popout, truncation of a long or non-ASCII folder name, and the icon tooltip (hover is not available on mobile, so nothing essential may depend on it).
 12. Run an agent id the plugin has no entry for. Check the generated name, the fallback icon, a single log line, and that an `agents` entry in `config.json` takes effect after a plugin reload.
 
+Empty-presence acceptance:
+
+1. Use only one provider. Open Orca with no active workspace, enable RPC, and inspect a Discord profile. Expect Playing Orca with no extra body fields or timer.
+2. Open a workspace without agents, including one containing only a plain terminal. Expect the same bare activity in normal and Incognito modes.
+3. Start an agent, let it become idle, then close its pane. Expect the existing rich card, then Idle, then bare Playing Orca. Old project, model, branch, custom artwork and repository data must disappear.
+4. Leave the workspace and return to an agent. Expect the internal session clock to continue; the empty interval itself has no displayed timer.
+5. Restart Discord while Orca remains empty. Expect automatic republishing after reconnect.
+6. Pause RPC while empty. Expect no activity until resumed. Disable the plugin and close Orca in separate checks; each must remove the activity.
+7. Disable the plugin before checking the headless daemon. Start the daemon with Orca open and empty; expect the same bare activity. Close Orca; expect clear. Stop the daemon before re-enabling the plugin.
+
+Record client/platform versions and observed outcomes. A mock IPC acknowledgement is not a substitute for the visible Discord check.
+
 When waiting persists, record the safe RPC operation/code from the plugin logs. Do not publish raw agent transcripts, credentials, or private repository paths in reports.
 
 ## Headless daemon

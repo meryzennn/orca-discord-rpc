@@ -2,6 +2,46 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPresenceRuntime } from './runtime.ts'
 import type { PresenceState } from './presence-controller.ts'
+import type { PresenceActivity } from './presence.ts'
+import { readPresenceState } from './orca-reader.ts'
+
+it('publishes an empty Orca session while open and clears only when the process closes', async () => {
+  let running = true
+  let reads = 0
+  let clears = 0
+  const sent: PresenceActivity[] = []
+  const instance = createPresenceRuntime({
+    clientId: '1', pollMs: 15000, useUploadedArt: false,
+    deps: {
+      isOrcaRunning: async () => running,
+      readState: async () => {
+        reads += 1
+        return readPresenceState(async () => '{"ok":true,"result":{"worktrees":[]}}')
+      },
+      apply: async activity => { sent.push(activity); return true },
+      clear: async () => { clears += 1; return true },
+      schedule: () => () => {}
+    }
+  })
+  try {
+    await instance.start()
+    await instance.start()
+    assert.deepEqual(sent, [{ details: '', state: '' }])
+    assert.equal(clears, 0)
+    assert.equal(instance.getStatus().orcaRunning, true)
+    const beforeClosing = reads
+    running = false
+    await instance.start()
+    assert.equal(clears, 1)
+    assert.equal(reads, beforeClosing)
+    assert.equal(instance.getStatus().orcaRunning, false)
+    running = true
+    await instance.start()
+    assert.deepEqual(sent, [{ details: '', state: '' }, { details: '', state: '' }])
+  } finally {
+    await instance.stop()
+  }
+})
 
 const STATE: PresenceState = {
   projectName: 'orca',

@@ -69,8 +69,8 @@ it('preserves a normalized repository suffix through the reader and tray builder
     execFileSync('git', ['-C', directory, 'config', '--local', 'remote.origin.url',
       'https://user:secret@example.com:8443/owner/repo.git.git?token=secret#anchor'], { windowsHide: true })
     const state = await readPresenceState(async () => JSON.stringify({ ok: true, result: {
-      worktrees: [{ isActive: true, path: directory, agents: [] }]
-    } }), readRepoUrl)
+      worktrees: [{ isActive: true, path: directory, agents: [{ agentType: 'claude', state: 'working' }] }]
+    } }), readRepoUrl, () => null)
     assert.equal(state?.repoUrl, 'https://example.com/owner/repo.git')
     assert.ok(state)
     const activity = buildPluginActivity({ ...state, startedAt: new Date('2026-11-06T00:00:00Z') })

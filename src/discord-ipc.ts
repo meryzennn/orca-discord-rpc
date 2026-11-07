@@ -22,10 +22,10 @@ function activityPayload(input: PresenceActivity): Record<string, unknown> {
     ['large_image', input.largeImageKey || input.largeImageUrl], ['large_text', input.largeImageText],
     ['small_image', input.smallImageKey || input.smallImageUrl], ['small_text', input.smallImageText]
   ]) if (key && value) assets[key] = value
-  const start = input.startTimestamp.getTime()
+  const start = input.startTimestamp?.getTime()
   return { type: 0, created_at: Date.now(), instance: false,
     ...(input.details ? { details: input.details } : {}), ...(input.state ? { state: input.state } : {}),
-    ...(Number.isFinite(start) ? { timestamps: { start } } : {}),
+    ...(start !== undefined && Number.isFinite(start) ? { timestamps: { start } } : {}),
     ...(Object.keys(assets).length ? { assets } : {}), ...(input.buttons?.length ? { buttons: input.buttons } : {}) }
 }
 function defaultPaths(): SocketPath[] {
