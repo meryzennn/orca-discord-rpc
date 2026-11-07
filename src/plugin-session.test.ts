@@ -178,6 +178,19 @@ it('retries an unacknowledged bare activity and respects disabled startup', asyn
   }
 })
 
+it('omits unused large artwork from plugin push logs', async () => {
+  const h = harness()
+  try {
+    await h.session.refresh()
+    assert.deepEqual(h.logs.filter(line => line.startsWith('pushed:')), [
+      'pushed: Oh My Pi · Working | 📁 Private Project'
+    ])
+    assert.ok(h.pushed[0]?.smallImageUrl)
+  } finally {
+    await h.session.stop()
+  }
+})
+
 it('redacts private state before the reused builder and clears before changing privacy', async () => {
   const h = harness()
   await h.session.refresh()

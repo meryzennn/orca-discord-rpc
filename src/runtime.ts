@@ -129,10 +129,9 @@ export function createPresenceRuntime(options: PresenceRuntimeOptions): Presence
           lastActivity = activity
           lastPushAt = Date.now()
           lastError = null
-          // Why the art: this line is the only record of what Discord was actually told, and
-          // the art reference is what made a rejected-image bug findable.
-          const art = activity.largeImageUrl ?? activity.largeImageKey ?? 'none'
-          log(`pushed: ${activity.details} | ${activity.state} | art=${art}`)
+          // Keep actual artwork references for diagnosing rejected images.
+          const art = activity.largeImageUrl ?? activity.largeImageKey
+          log(`pushed: ${activity.details} | ${activity.state}${art ? ` | art=${art}` : ''}`)
         } else {
           lastError = 'Discord rejected or could not receive the activity'
           log(`push failed: ${activity.details}`)

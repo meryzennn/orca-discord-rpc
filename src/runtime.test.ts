@@ -10,8 +10,10 @@ it('publishes an empty Orca session while open and clears only when the process 
   let reads = 0
   let clears = 0
   const sent: PresenceActivity[] = []
+  const logs: string[] = []
   const instance = createPresenceRuntime({
     clientId: '1', pollMs: 15000, useUploadedArt: false,
+    log: line => logs.push(line),
     deps: {
       isOrcaRunning: async () => running,
       readState: async () => {
@@ -27,6 +29,7 @@ it('publishes an empty Orca session while open and clears only when the process 
     await instance.start()
     await instance.start()
     assert.deepEqual(sent, [{ details: '', state: '' }])
+    assert.equal(logs.find(line => line.startsWith('pushed:')), 'pushed:  | ')
     assert.equal(clears, 0)
     assert.equal(instance.getStatus().orcaRunning, true)
     const beforeClosing = reads
@@ -198,6 +201,7 @@ describe('createPresenceRuntime', () => {
       h.logs.some((line) => line.includes('pushed') && line.includes('Claude')),
       `expected a pushed line, got: ${JSON.stringify(h.logs)}`
     )
+    assert.ok(h.logs.some(line => line.includes(' | art=https://')))
   })
 
   it('pauses without tearing the transport down', async () => {
