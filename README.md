@@ -2,7 +2,7 @@
 
 ![Illustration of a whale tail above an Oh My Pi, Idle presence chip](docs/images/whale-tail.jpg)
 
-Shows your active [Orca](https://github.com/stablyai/orca) workspace and coding agent on your Discord profile.
+Keeps [Orca](https://github.com/stablyai/orca) visible on your Discord profile, with workspace and agent details when an agent is open. Without a workspace or agent, Playing Orca and its elapsed timer stay visible.
 
 The plugin is TypeScript bundled to JavaScript. It runs in Orca's built-in Node.js worker on Windows, macOS, and Linux and starts with Orca. You need no separate app, no Node.js install, and no terminal command.
 
@@ -18,7 +18,14 @@ These are illustrations of the plugin, not captures from a live session. Real ca
 
 ## Install
 
-You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged in. Discord in a browser cannot connect to the plugin.
+You need the Discord desktop app running and logged in. Discord in a browser cannot connect to the plugin.
+
+| Feature | Required Orca application version |
+| --- | --- |
+| Rich Presence, pause and Incognito | 1.4.250 or newer |
+| Update from the plugin page | 1.4.253 or newer |
+
+These are versions of the **Orca application**. The **Discord Presence plugin** has its own version, currently **v0.3.1**.
 
 1. Open Settings > Plugins in Orca and turn on plugins if needed.
 2. Click Add Plugin and choose a Git source.
@@ -28,7 +35,7 @@ You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged 
 
 The worker asks for `workspace:read`, `agent:read`, and `settings:own`. It reads workspace information and local agent session files, then sends presence updates to Discord.
 
-A tag URL stays on the same code until you change it. `#main` gives you the latest commit, which can change at any time, including what Discord shows.
+Orca installs the commit resolved from your chosen tag or branch. Use the [update command](#updates) to fetch a newer version; restarting RPC does not fetch code. `#main` follows development commits, which can change what Discord shows.
 
 Run one presence provider at a time. Before you install, stop any older one: the headless daemon, a development plugin, or the Windows exe (see [Migrating from the Windows exe](#migrating-from-the-windows-exe)).
 
@@ -38,7 +45,7 @@ With RPC enabled, Orca stays visible on Discord while the app is open. Without a
 
 The same start timestamp is sent in every view, so leaving a workspace or closing the last agent does not reset playtime. Pausing RPC or closing Orca ends that session. Updating or restarting the plugin starts a new session.
 
-The status bar has these controls:
+The bottom status bar contains **RPC** and **Incognito**. The [update command](#updates) is on the plugin page.
 
 | Control | What it does |
 | --- | --- |
@@ -109,17 +116,24 @@ Presence updates use the local connection to Discord. Running the update command
 
 ## Updates
 
-Open **Settings > Plugins > Discord Rich Presence**, find **Discord RPC: Update installed plugin**, and click its **Run** button. The command confirms that checking has started; progress and results appear in **Logs** on the same page. The status bar only contains RPC and Incognito controls. The command is also available from the command palette.
+Requires **Orca application 1.4.253 or newer** and a Git installation of the plugin.
 
-A successful installation can restart the worker before its final log is written. Confirm the installed version on the plugin page in that case.
+1. Open **Settings > Plugins > Discord Rich Presence**.
+2. Find **Discord RPC: Update installed plugin** and click **Run** beside it.
+3. Read **Logs** on the same page for the result.
+4. After an installed update, check the plugin version shown on that page. The worker can restart before its final log is written.
 
-Updating requires the **Orca application 1.4.253 or newer**. Presence still works on Orca 1.4.250; an update attempt there explains the application upgrade requirement in Logs.
+The same command is available from the command palette.
 
-The command runs Orca's updater for the published Git installation, `meryzennn.discord-presence`. A version-tag installation follows the newest version tag; a branch installation follows its newest commit. A commit pin stays pinned. Development folders keep their own source and must be removed or disabled before using the Git installation.
+When the installed version is current, running the command logs `RPC is up to date` and leaves presence and its timer running. You can use this to test the update command without installing another version. An actual installation restarts the worker and starts a new elapsed session.
 
-Install v0.3.1 through Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.1`. You do not need to uninstall the same Git plugin first. Review the update command when Orca asks. Future updates with the same access keep their approval; updates requesting new access wait for review in Settings > Plugins. The command never approves extra access for you.
+For older versions without the update command, add `https://github.com/meryzennn/orca-discord-rpc.git#v0.3.1` through **Settings > Plugins > Add Plugin** once. You do not need to uninstall the same Git plugin first. Review the update command when Orca asks.
 
-An installed update restarts the worker and starts a new elapsed session. An up-to-date check or a refused update leaves the running presence alone. Checks happen when you click; this plugin does not poll for updates or install them in the background. Orca's automatic update policy applies to pinned catalog releases, which this direct Git installation does not use.
+The command updates the published Git installation, `meryzennn.discord-presence`. A version-tag installation follows the newest version tag; a branch installation follows its newest commit; a commit pin stays pinned. Development folders keep their own source, so remove or disable a development copy before using the Git installation.
+
+Updates with the same access keep their approval. Updates requesting new access wait for review in **Settings > Plugins**, while the current version keeps running. The command never approves extra access for you.
+
+Checks happen when you click Run. This plugin does not poll for updates or install them in the background. Orca's automatic update policy applies to pinned catalog releases, which this direct Git installation does not use.
 
 ## Migrating from the Windows exe
 
@@ -226,6 +240,8 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 | No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.3.1` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
+| `Updating requires Orca 1.4.253 or newer` | Upgrade the Orca application, then restart it. Updating only the Discord Presence plugin does not add the missing updater command to Orca. |
+| Cannot find the update control | Open the plugin's detail page in Settings > Plugins and click Run beside Discord RPC: Update installed plugin. It is not a status bar control. |
 | No activity | Check that Orca and Discord desktop are open, the plugin is enabled, RPC is not paused, and Discord activity visibility is enabled. A workspace or agent is not required. |
 | Agent name instead of a model | Check that the agent has a saved session for this workspace. Agents without a model resolver always show their name. |
 | New agent shows a generated name and the Orca icon | The plugin has no entry for the id Orca reported. Add it under `agents` in `config.json` (see [Adding a new agent](#adding-a-new-agent)). |
