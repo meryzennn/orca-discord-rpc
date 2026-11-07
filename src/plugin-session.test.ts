@@ -108,15 +108,15 @@ it('preserves the Playing session timer when toggling Incognito in either direct
   const h = harness({ incognito: false })
   try {
     await h.session.refresh()
-    const started = h.pushed[0]!.startTimestamp.getTime()
+    const started = h.pushed[0]!.startTimestamp!.getTime()
     mock.timers.tick(60000)
     await h.session.setIncognito(true)
     assert.equal(h.pushed.at(-1)?.state, '📁 Private Project')
-    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     mock.timers.tick(60000)
     await h.session.setIncognito(false)
     assert.equal(h.pushed.at(-1)?.state, '📁 secret-project')
-    assert.equal(h.pushed.at(-1)?.startTimestamp.getTime(), started)
+    assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
   } finally { await h.session.stop(); mock.timers.reset() }
 })
@@ -127,7 +127,7 @@ it('starts a new session timer after the workspace disappears, including in Inco
   const h = harness({ incognito: false, readState: async () => current })
   try {
     await h.session.refresh()
-    const started = h.pushed[0]!.startTimestamp.getTime()
+    const started = h.pushed[0]!.startTimestamp!.getTime()
     mock.timers.tick(60000)
     current = null
     await h.session.refresh()
@@ -136,7 +136,7 @@ it('starts a new session timer after the workspace disappears, including in Inco
     mock.timers.tick(60000)
     await h.session.refresh()
     assert.equal(h.pushed.at(-1)?.state, '📁 Private Project')
-    assert.ok(h.pushed.at(-1)!.startTimestamp.getTime() > started)
+    assert.ok(h.pushed.at(-1)!.startTimestamp!.getTime() > started)
   } finally { await h.session.stop(); mock.timers.reset() }
 })
 

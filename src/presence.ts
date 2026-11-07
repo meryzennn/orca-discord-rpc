@@ -29,7 +29,7 @@ export type PresenceInput = {
 export type PresenceActivity = {
   details: string
   state: string
-  startTimestamp: Date
+  startTimestamp?: Date
   largeImageKey?: string
   largeImageUrl?: string
   largeImageText?: string
@@ -52,22 +52,12 @@ export function buildActivity(input: PresenceInput): PresenceActivity {
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
   })
+  if (agent === null) return { details: text.details, state: text.state }
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback
   // Discord needs one shape per slot: an asset key or a URL, never both.
   const branchArt = uploaded
     ? { smallImageKey: registry.branchIcon.asset, smallImageText: branchText }
     : { smallImageUrl: registry.branchIcon.imageUrl, smallImageText: branchText }
-
-  if (agent === null) {
-    return {
-      details: text.details,
-      state: text.state,
-      startTimestamp: input.startedAt,
-      largeImageKey: registry.fallbackIcon.asset,
-      largeImageText: FORMAT.brand,
-      ...branchArt
-    }
-  }
 
   const image = (uploaded ? agent.asset : null) ?? agent.imageUrl
   const agentArt = uploaded

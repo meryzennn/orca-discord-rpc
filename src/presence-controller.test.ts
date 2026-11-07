@@ -8,7 +8,7 @@ const T0 = new Date('2026-10-05T00:00:00.000Z')
 const T1 = new Date('2026-10-05T00:01:00.000Z')
 
 function harness(initialState: PresenceState | null) {
-  const applied: { details: string; state: string; startTimestamp: Date }[] = []
+  const applied: PresenceActivity[] = []
   let cleared = 0
   let state = initialState
   let now = T0
