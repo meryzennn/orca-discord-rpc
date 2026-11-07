@@ -10,6 +10,7 @@ import { DEFAULT_CLIENT_ID, DEFAULT_POLL_MS, readConfigFile, type ConfigFile } f
 import type { PresenceActivity } from './presence.ts'
 import type { PresenceState } from './presence-controller.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
+import type { PluginUpdateResult } from './update.ts'
 
 it('declares a resident worker with a real status command and both refresh events', () => {
   const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
@@ -51,7 +52,8 @@ function deferred<T>() {
 }
 
 function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null = null,
-  readState?: (signal: AbortSignal) => Promise<PresenceState | null>) {
+  readState?: (signal: AbortSignal) => Promise<PresenceState | null>,
+  updatePlugin: () => Promise<PluginUpdateResult> = async () => ({ status: 'up-to-date', version: '0.2.4' })) {
   const settings = new Map(Object.entries(values))
   const commands = new Map<string, () => Promise<unknown>>()
   const events = new Map<string, () => void>()
@@ -61,6 +63,7 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
   const logs: string[] = []
   const statuses: Record<string, string>[] = []
   const privacyStatuses: Record<string, string>[] = []
+  const updateStatuses: Record<string, string>[] = []
   const activities: PresenceActivity[] = []
   const order: string[] = []
   let signal: AbortSignal | null = null
@@ -86,8 +89,8 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
     } },
     host: { call: async (method, params) => {
       assert.equal(method, 'statusBar.update')
-      assert.ok(params.id === 'presence' || params.id === 'incognito')
-      const updates = params.id === 'presence' ? statuses : privacyStatuses
+      assert.ok(params.id === 'presence' || params.id === 'incognito' || params.id === 'update')
+      const updates = params.id === 'presence' ? statuses : params.id === 'incognito' ? privacyStatuses : updateStatuses
       updates.push(params)
     } }
   }
@@ -112,15 +115,112 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
         isConnected: () => connected, connectionGeneration: () => 0
       }
     })
-  })
+  }, updatePlugin)
   return {
-    lifecycle, commands, events, changes, reads, writes, logs, statuses, privacyStatuses, activities, order,
+    lifecycle, commands, events, changes, reads, writes, logs, statuses, privacyStatuses, updateStatuses, activities, order,
     stateReads: () => stateReads, signal: () => signal,
     setGet: (handler: typeof get) => { get = handler },
     publishStatus: (status: PresenceRuntimeStatus) => publishStatus?.(status),
     change: (key: string, value: unknown) => { settings.set(key, value); changes.forEach(handler => handler({ key })) }
   }
 }
+
+it('declares an update button backed by a registered worker command', async () => {
+  const manifest = JSON.parse(readFileSync(new URL('../orca-plugin.json', import.meta.url), 'utf8'))
+  const button = manifest.contributes.statusBarItems.find((entry: { id: string }) => entry.id === 'update')
+  assert.ok(button)
+  assert.equal(button.command, 'presence.update')
+  assert.ok(manifest.contributes.commands.some((entry: { id: string }) => entry.id === button.command))
+  const h = harness()
+  try {
+    await h.lifecycle.activate()
+    assert.ok(h.commands.has(button.command))
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('starts updates only on click and coalesces clicks without blocking the command or RPC', async () => {
+  const gate = deferred<{ status: 'up-to-date'; version: string }>()
+  let calls = 0
+  const h = harness({ enabled: false, incognito: true }, null, undefined, () => { calls += 1; return gate.promise })
+  try {
+    await h.lifecycle.activate()
+    assert.equal(calls, 0)
+    const command = h.commands.get('presence.update')
+    assert.ok(command)
+    let returned = false
+    void command().then(() => { returned = true })
+    await setImmediate()
+    assert.equal(returned, true)
+    await command()
+    assert.equal(calls, 1)
+    assert.equal(h.updateStatuses.at(-1)?.text, 'Updating RPC')
+    assert.equal(h.activities.length, 0)
+    assert.deepEqual(h.writes, [])
+    gate.resolve({ status: 'up-to-date', version: '0.2.4' })
+    await setImmediate()
+    assert.equal(h.updateStatuses.at(-1)?.text, 'RPC up to date')
+    assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('0.2.4'))
+  } finally {
+    gate.resolve({ status: 'up-to-date', version: '0.2.4' })
+    await h.lifecycle.deactivate()
+  }
+})
+
+it('shows update errors without stopping presence and permits another attempt', async () => {
+  let fail = true
+  const h = harness({ incognito: false }, null, undefined, async () => {
+    if (fail) throw new Error('Updating requires Orca 1.4.253 or newer.')
+    return { status: 'up-to-date', version: '0.2.4' }
+  })
+  try {
+    await h.lifecycle.activate()
+    await setImmediate()
+    await h.commands.get('presence.update')!()
+    await setImmediate()
+    assert.equal(h.updateStatuses.at(-1)?.text, 'Update error')
+    assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('1.4.253'))
+    assert.ok(h.logs.some(line => line.includes('1.4.253')))
+    assert.equal(h.order.includes('clear'), false)
+    assert.ok(h.activities.length > 0)
+    fail = false
+    await h.commands.get('presence.update')!()
+    await setImmediate()
+    assert.equal(h.updateStatuses.at(-1)?.text, 'RPC up to date')
+  } finally { await h.lifecycle.deactivate() }
+})
+
+it('does not wait for a self-update during shutdown or send late status updates', async () => {
+  const gate = deferred<{ status: 'up-to-date'; version: string }>()
+  const h = harness({}, null, undefined, () => gate.promise)
+  await h.lifecycle.activate()
+  const command = h.commands.get('presence.update')!
+  await command()
+  let stopped = false
+  const shutdown = h.lifecycle.deactivate().then(() => { stopped = true })
+  await setImmediate()
+  gate.resolve({ status: 'up-to-date', version: '0.2.4' })
+  assert.equal(stopped, true)
+  await shutdown
+  const count = h.updateStatuses.length
+  await setImmediate()
+  assert.equal(h.updateStatuses.length, count)
+  await command()
+  assert.equal(h.updateStatuses.length, count)
+  assert.equal(h.commands.size, 0)
+})
+
+it('shows updated and pinned outcomes from Orca', async () => {
+  for (const [status, text] of [['updated', 'RPC updated'], ['pinned', 'RPC pinned']] as const) {
+    const h = harness({}, null, undefined, async () => ({ status, version: '0.3.0' }))
+    try {
+      await h.lifecycle.activate()
+      await h.commands.get('presence.update')!()
+      await setImmediate()
+      assert.equal(h.updateStatuses.at(-1)?.text, text)
+      assert.ok(h.updateStatuses.at(-1)?.tooltip?.includes('0.3.0'))
+    } finally { await h.lifecycle.deactivate() }
+  }
+})
 
 it('migrates only a legacy boolean before the first push and preserves saved Incognito', async () => {
   for (const [saved, legacy, expected, migrated] of [

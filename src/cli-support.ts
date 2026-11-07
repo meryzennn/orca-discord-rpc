@@ -1,8 +1,8 @@
-export type Command = 'start' | 'stop' | 'status' | 'autostart-enable' | 'autostart-disable' | 'help'
+export type Command = 'start' | 'stop' | 'status' | 'update' | 'autostart-enable' | 'autostart-disable' | 'help'
 
 export function parseCommand(argv: readonly string[]): Command {
   const [first, second] = argv
-  if (first === 'start' || first === 'stop' || first === 'status') {
+  if (first === 'start' || first === 'stop' || first === 'status' || first === 'update') {
     return first
   }
   if (first === 'autostart' && second === 'enable') {
@@ -37,6 +37,7 @@ Usage:
   orca-discord-rpc start     Start the background daemon
   orca-discord-rpc stop      Stop the daemon
   orca-discord-rpc status    Show whether the daemon is running
+  orca-discord-rpc update    Update this Git checkout and restart a running daemon
   orca-discord-rpc autostart enable   Start on login (Windows)
   orca-discord-rpc autostart disable  Do not start on login
 

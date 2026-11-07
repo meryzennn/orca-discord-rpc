@@ -10,6 +10,7 @@ import { readRepoUrl } from './git-remote.ts'
 import { createPluginSession, type PluginSession } from './plugin-session.ts'
 import type { PresenceRuntimeStatus } from './runtime.ts'
 import { resolveBundledCliEntry, pluginDiscordPaths } from './plugin-platform.ts'
+import { updateInstalledPlugin, type PluginUpdateResult } from './update.ts'
 
 type Disposable = { dispose(): void }
 export type PluginApi = {
@@ -28,7 +29,9 @@ export function createPluginLifecycle(
   orca: PluginApi,
   legacy: ConfigFile | null,
   startSession: (enabled: boolean, incognito: boolean, signal: AbortSignal,
-    onStatus: (status: PresenceRuntimeStatus) => void) => PluginSession
+    onStatus: (status: PresenceRuntimeStatus) => void) => PluginSession,
+  updatePlugin: () => Promise<PluginUpdateResult> = () => updateInstalledPlugin(
+    process.execPath, resolveBundledCliEntry(process.execPath, process.platform))
 ): { activate(): Promise<void>; deactivate(): Promise<void> } {
   const readerAbort = new AbortController()
   const report = (error: unknown): void => orca.log(error instanceof Error ? error.message : String(error))
@@ -38,6 +41,7 @@ export function createPluginLifecycle(
   let starting: Promise<void> | null = null
   let shutdown: Promise<void> | null = null
   let settingsWork = Promise.resolve<unknown>(undefined)
+  let updateWork: Promise<void> | null = null
   const queueSetting = (operation: () => Promise<unknown>): Promise<unknown> => {
     const job = settingsWork.then(async () => { if (!stopping) return operation() })
     settingsWork = job.catch(report)
@@ -58,6 +62,25 @@ export function createPluginLifecycle(
       tooltip: value ? 'Incognito on: project and repository hidden. Click to turn off.'
         : 'Incognito off: click to hide project and repository.'
     }).catch(report)
+  }
+  const updateStatus = (text: string, tooltip: string, tone = 'neutral'): void => {
+    if (!stopping) void orca.host.call('statusBar.update', { id: 'update', text, tooltip, tone }).catch(report)
+  }
+  const requestUpdate = async (): Promise<void> => {
+    if (stopping || updateWork) return
+    updateStatus('Updating RPC', 'Orca is checking the installed Git plugin for updates.')
+    // Return before the host command deadline; installation may replace this worker.
+    updateWork = Promise.resolve().then(updatePlugin).then(result => {
+      const text = result.status === 'updated' ? 'RPC updated'
+        : result.status === 'up-to-date' ? 'RPC up to date' : 'RPC pinned'
+      const tooltip = result.status === 'pinned'
+        ? 'Version ' + result.version + ' is pinned. Install a version tag or branch to follow updates.'
+        : 'Installed version ' + result.version + '. Click to check again.'
+      updateStatus(text, tooltip)
+    }).catch(error => {
+      report(error)
+      updateStatus('Update error', error instanceof Error ? error.message : String(error), 'warning')
+    }).finally(() => { updateWork = null })
   }
   const deactivate = (): Promise<void> => {
     if (shutdown) return shutdown
@@ -102,6 +125,7 @@ export function createPluginLifecycle(
         const refresh = (): void => { if (!stopping) void current.refresh().catch(report) }
         subscriptions.push(orca.commands.register('presence.toggle', () => toggleSetting('enabled')))
         subscriptions.push(orca.commands.register('presence.incognito.toggle', () => toggleSetting('incognito')))
+        subscriptions.push(orca.commands.register('presence.update', requestUpdate))
         subscriptions.push(orca.events.on('workspace.changed', refresh))
         subscriptions.push(orca.events.on('agent.status.changed', refresh))
         subscriptions.push(orca.settings.onDidChange(({ key }) => {
@@ -146,7 +170,7 @@ export default async function activate(orca: PluginApi): Promise<void> {
       (agentType, path) => findAgentModel(agentType, path, undefined, registry)
     ),
     transport: createDiscordPresence(config.clientId, clientId => createDiscordIpcClient(clientId, paths))
-  }))
+  }), () => updateInstalledPlugin(process.execPath, cliEntry))
   lifecycle = current
   await current.activate()
 }

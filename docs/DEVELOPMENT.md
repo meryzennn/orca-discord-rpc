@@ -97,12 +97,17 @@ When waiting persists, record the safe RPC operation/code from the plugin logs. 
 
 ## Headless daemon
 
+The Update RPC status item invokes the host's bundled CLI with `plugin update meryzennn.discord-presence --json`. It requires Orca 1.4.253+ but leaves presence usable on the older supported host. The command handler returns immediately so a slow update does not exceed Orca's worker-command deadline. Shutdown does not wait for the update request, because the update can replace that worker. No `--approve` flag is ever passed.
+
+For update-button acceptance, use a Git installation on Orca 1.4.253+: check up-to-date, available update, pinned commit, network failure and access-review outcomes. Confirm an up-to-date or rejected request preserves RPC state and timer, repeated clicks do not duplicate requests, and a completed installation starts the new worker. On Orca 1.4.250, confirm the button explains the application upgrade requirement without disrupting RPC. Development folders are not self-updated by this button.
+
 Run the standalone headless Node daemon:
 
 ```sh
 npm ci
 npm start
 npm run status
+node src/cli.ts update
 npm stop
 ```
 
@@ -110,12 +115,14 @@ Standalone mode honours `ORCA_DISCORD_CLIENT_ID`, `ORCA_DISCORD_UPLOADED_ART`, a
 
 The daemon builds its text with the same format definition and agent registry as the plugin, and reads the `agents` map from the same `config.json`. Unknown agent ids are logged once to `daemon.log`.
 
+The headless update command refuses tracked changes and nested source folders, pulls only a fast-forward from the configured upstream, and restarts the daemon only after a changed checkout. The integration test uses a separate repository and a test-only PID path to verify restart, no-op and refusal behavior without touching a user's daemon.
+
 ## Releases
 
 1. Land the change with `npm ci`, `npm test`, `npm run typecheck`, and `npm run build:plugin` passing, and commit the rebuilt `plugin/runtime.mjs`.
 2. Set the same semver `version` in `package.json`, `package-lock.json`, and `orca-plugin.json`.
 3. Tag the commit `vX.Y.Z` and push the tag. Direct Git installs resolve `#vX.Y.Z`, so the tag must contain `orca-plugin.json` and the built `plugin/runtime.mjs`.
-4. Publish a GitHub release. The notes must say how to update: Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z`. The notes for the latest tag are in [release notes](release-notes/v0.2.4.md).
+4. Publish a GitHub release. The notes must say how to update: use Update RPC on Orca 1.4.253+, or Settings > Plugins > Add Plugin with `https://github.com/meryzennn/orca-discord-rpc.git#vX.Y.Z` when coming from a version without the button. The notes for the latest tag are in [release notes](release-notes/v0.3.0.md).
 5. Land breaking changes on a branch and merge them when you release: `#main` installs track every commit on it.
 
 Legacy Windows exe: its updater reads the repository's latest release, offers any newer tag, and downloads the first `.zip` asset (or `OrcaPresence-windows.zip` for that tag). A release published as latest without that asset makes the old exe's download fail silently. The exe's source is no longer on `main`; it is in the history before commit `2664b2e`. Before publishing a plugin release as latest, either attach a migration build of `OrcaPresence-windows.zip` to it (zip root holds `OrcaPresence.exe` with no wrapper folder) or leave "Set as the latest release" unchecked.

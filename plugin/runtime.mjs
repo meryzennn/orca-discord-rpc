@@ -1381,9 +1381,9 @@ function parsePgrep(output) {
   return /^\s*\d+\s*$/m.test(output);
 }
 async function defaultExec(command, args) {
-  const { execFile: execFile3 } = await import("node:child_process");
+  const { execFile: execFile4 } = await import("node:child_process");
   return new Promise((resolve) => {
-    execFile3(
+    execFile4(
       command,
       [...args],
       { timeout: 5e3, windowsHide: true, maxBuffer: 1024 * 1024 },
@@ -1691,8 +1691,61 @@ function createPluginSession(options) {
   };
 }
 
+// src/update.ts
+import { execFile as execFile3 } from "node:child_process";
+import { homedir as homedir4 } from "node:os";
+function run(command, args, options = {}) {
+  return new Promise((resolve) => {
+    execFile3(command, args, {
+      ...options,
+      encoding: "utf8",
+      timeout: 12e4,
+      maxBuffer: 1024 * 1024,
+      windowsHide: true
+    }, (error2, stdout) => resolve({ error: error2, stdout }));
+  });
+}
+async function updateInstalledPlugin(command, nodeEntry) {
+  const pluginKey = "meryzennn.discord-presence";
+  const { error: error2, stdout } = await run(command, [nodeEntry, "plugin", "update", pluginKey, "--json"], {
+    env: pluginCliEnv(process.env, process.platform, homedir4())
+  });
+  const unconfirmed = "Could not confirm the RPC update. Check Orca Settings > Plugins.";
+  let response;
+  try {
+    response = JSON.parse(stdout);
+  } catch {
+    throw new Error(unconfirmed);
+  }
+  if (!isRecord(response)) throw new Error(unconfirmed);
+  if (response.ok !== true) {
+    const failure = isRecord(response.error) ? response.error : {};
+    if (failure.code === "invalid_argument" && typeof failure.message === "string" && failure.message.startsWith("Unknown command: plugin update")) {
+      throw new Error("Updating requires Orca 1.4.253 or newer. Upgrade the Orca application first.");
+    }
+    if (failure.code === "approval_required" || failure.code === "approval_stale") {
+      throw new Error("This update needs review in Orca Settings > Plugins. The current version stays installed.");
+    }
+    if (failure.code === "plugin_not_found") {
+      throw new Error("No Git installation of Discord RPC was found. Install it through Orca Settings > Plugins first.");
+    }
+    if (failure.code === "git_auth_failed") {
+      throw new Error("Git authentication failed. Check the Orca host's Git sign-in and retry.");
+    }
+    throw new Error(unconfirmed);
+  }
+  const result = response.result;
+  if (error2 || !isRecord(result) || result.pluginKey !== pluginKey || result.status !== "updated" && result.status !== "up-to-date" && result.status !== "pinned" || typeof result.version !== "string" || result.version.length > 80 || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(result.version)) {
+    throw new Error(unconfirmed);
+  }
+  return { status: result.status, version: result.version };
+}
+
 // src/orca-plugin.ts
-function createPluginLifecycle(orca, legacy, startSession) {
+function createPluginLifecycle(orca, legacy, startSession, updatePlugin = () => updateInstalledPlugin(
+  process.execPath,
+  resolveBundledCliEntry(process.execPath, process.platform)
+)) {
   const readerAbort = new AbortController();
   const report = (error2) => orca.log(error2 instanceof Error ? error2.message : String(error2));
   let session = null;
@@ -1701,6 +1754,7 @@ function createPluginLifecycle(orca, legacy, startSession) {
   let starting = null;
   let shutdown = null;
   let settingsWork = Promise.resolve(void 0);
+  let updateWork = null;
   const queueSetting = (operation) => {
     const job = settingsWork.then(async () => {
       if (!stopping) return operation();
@@ -1723,6 +1777,23 @@ function createPluginLifecycle(orca, legacy, startSession) {
       text: value ? "Incognito On" : "Incognito Off",
       tooltip: value ? "Incognito on: project and repository hidden. Click to turn off." : "Incognito off: click to hide project and repository."
     }).catch(report);
+  };
+  const updateStatus = (text, tooltip, tone = "neutral") => {
+    if (!stopping) void orca.host.call("statusBar.update", { id: "update", text, tooltip, tone }).catch(report);
+  };
+  const requestUpdate = async () => {
+    if (stopping || updateWork) return;
+    updateStatus("Updating RPC", "Orca is checking the installed Git plugin for updates.");
+    updateWork = Promise.resolve().then(updatePlugin).then((result) => {
+      const text = result.status === "updated" ? "RPC updated" : result.status === "up-to-date" ? "RPC up to date" : "RPC pinned";
+      const tooltip = result.status === "pinned" ? "Version " + result.version + " is pinned. Install a version tag or branch to follow updates." : "Installed version " + result.version + ". Click to check again.";
+      updateStatus(text, tooltip);
+    }).catch((error2) => {
+      report(error2);
+      updateStatus("Update error", error2 instanceof Error ? error2.message : String(error2), "warning");
+    }).finally(() => {
+      updateWork = null;
+    });
   };
   const deactivate2 = () => {
     if (shutdown) return shutdown;
@@ -1774,6 +1845,7 @@ function createPluginLifecycle(orca, legacy, startSession) {
         };
         subscriptions.push(orca.commands.register("presence.toggle", () => toggleSetting("enabled")));
         subscriptions.push(orca.commands.register("presence.incognito.toggle", () => toggleSetting("incognito")));
+        subscriptions.push(orca.commands.register("presence.update", requestUpdate));
         subscriptions.push(orca.events.on("workspace.changed", refresh));
         subscriptions.push(orca.events.on("agent.status.changed", refresh));
         subscriptions.push(orca.settings.onDidChange(({ key }) => {
@@ -1819,7 +1891,7 @@ async function activate(orca) {
       (agentType, path) => findAgentModel(agentType, path, void 0, registry)
     ),
     transport: createDiscordPresence(config.clientId, (clientId) => createDiscordIpcClient(clientId, paths))
-  }));
+  }), () => updateInstalledPlugin(process.execPath, cliEntry));
   lifecycle = current;
   await current.activate();
 }

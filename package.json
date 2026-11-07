@@ -1,6 +1,6 @@
 {
   "name": "orca-discord-rpc",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Discord Rich Presence for Orca workspaces and coding agents.",

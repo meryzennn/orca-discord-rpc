@@ -11,6 +11,7 @@ describe('parseCommand', () => {
     assert.equal(parseCommand(['start']), 'start')
     assert.equal(parseCommand(['stop']), 'stop')
     assert.equal(parseCommand(['status']), 'status')
+    assert.equal(parseCommand(['update']), 'update')
   })
 
   it('reads the autostart subcommand', () => {

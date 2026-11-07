@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseCommand, isProcessAlive, formatStatus, HELP_TEXT } from './cli-support.ts'
 import { appDirPath, pidPath, autostartShimPath } from './paths.ts'
+import { updateHeadlessCheckout } from './update.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -101,7 +102,7 @@ function disableAutostart(): void {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const command = parseCommand(process.argv.slice(2))
   switch (command) {
     case 'start': {
@@ -119,6 +120,22 @@ function main(): void {
     case 'status':
       console.log(formatStatus(runningPid()))
       return
+    case 'update': {
+      const previous = runningPid()
+      if (!await updateHeadlessCheckout(dirname(here))) {
+        console.log('Already up to date.')
+        return
+      }
+      if (previous !== null && runningPid() === previous) {
+        if (!stopDaemon()) throw new Error('Updated the checkout, but could not stop the old daemon.')
+        const pid = startDaemon()
+        if (!pid) throw new Error('Updated the checkout, but could not restart the daemon.')
+        console.log(`Updated and restarted (pid ${pid}).`)
+      } else {
+        console.log('Updated the checkout. Run orca-discord-rpc start when ready.')
+      }
+      return
+    }
     case 'autostart-enable':
       enableAutostart()
       console.log('autostart enabled')
@@ -132,4 +149,7 @@ function main(): void {
   }
 }
 
-main()
+void main().catch(error => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})
