@@ -34,7 +34,9 @@ Run one presence provider at a time. Before you install, stop any older one: the
 
 ## Use
 
-Open a workspace in Orca and start an agent. Presence follows your workspace, agent, and model changes, polling every 15 seconds by default.
+With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows only Playing Orca, with no project, model, custom artwork, button or elapsed timer. Discord may still show its normal application icon. Open an agent to show its details; an idle agent keeps its Idle status. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
+
+The session clock continues internally through the empty view and reappears when an agent opens. Pausing RPC or closing Orca ends that session.
 
 The status bar has these controls:
 
@@ -162,7 +164,7 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 | No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.2` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
-| No activity | Open an active Orca workspace and check Discord's activity visibility settings. |
+| No activity | Check that Orca and Discord desktop are open, the plugin is enabled, RPC is not paused, and Discord activity visibility is enabled. A workspace or agent is not required. |
 | Agent name instead of a model | Check that the agent has a saved session for this workspace. Agents without a model resolver always show their name. |
 | New agent shows a generated name and the Orca icon | The plugin has no entry for the id Orca reported. Add it under `agents` in `config.json` (see [Adding a new agent](#adding-a-new-agent)). |
 | Missing icon | Discord may not render the public image. Use uploaded artwork with the matching asset keys. |

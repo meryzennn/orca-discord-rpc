@@ -160,14 +160,14 @@ describe('createPresenceController', () => {
     assert.equal(h.applied[1]?.startTimestamp, T0)
   })
 
-  it('clears when no worktree is active', async () => {
+  it('clears when the reader reports no publishable state', async () => {
     const h = harness(null)
     await h.controller.poll()
     assert.equal(h.cleared(), 1)
     assert.equal(h.applied.length, 0)
   })
 
-  it('does not clear repeatedly while nothing is active', async () => {
+  it('does not clear repeatedly for a null reading', async () => {
     const h = harness(null)
     await h.controller.poll()
     await h.controller.poll()
