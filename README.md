@@ -22,7 +22,7 @@ You need Orca 1.4.250 or newer, plus the Discord desktop app running and logged 
 
 1. Open Settings > Plugins in Orca and turn on plugins if needed.
 2. Click Add Plugin and choose a Git source.
-3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.2`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
+3. Enter `https://github.com/meryzennn/orca-discord-rpc.git#v0.2.3`. The [tags page](https://github.com/meryzennn/orca-discord-rpc/tags) lists newer versions.
 4. Check that Orca resolves the tag you entered.
 5. Read Orca's worker access prompt, approve it, and enable the plugin.
 
@@ -53,7 +53,7 @@ Privacy changes do not reload the plugin or restart the Playing timer. Closing O
 
 ## How it works
 
-The plugin runs inside Orca's worker. Every poll (and every `workspace.changed` or `agent.status.changed` event) it reads your active workspace, builds a Discord activity, and sends it only when something changed.
+The plugin runs inside Orca's worker. Every poll (and every `workspace.changed` or `agent.status.changed` event) it reads your active workspace and builds a Discord activity. It sends an update when the state changes or Discord reconnects. A valid reading without an active workspace or agent still produces a bare Playing Orca activity.
 
 ```mermaid
 flowchart LR
@@ -66,12 +66,12 @@ flowchart LR
 
   subgraph PLUGIN["Plugin worker"]
     SESSION["Session<br/>poll every 15 s + event refresh"]
-    STATE["Pick the active workspace<br/>featured agent, agent count, branch"]
-    MODEL["Model resolver<br/>reads the agent's own log"]
+    STATE["Pick the active workspace<br/>or keep an empty state"]
+    MODEL["Model resolver<br/>reads logs only for an open agent"]
     PRIV{"Incognito on?"}
     HIDE["Folder becomes Private Project<br/>branch and repository button hidden"]
-    DEDUP{"State changed<br/>since last push?"}
-    BUILD["Build the activity<br/>text from presence-format.json<br/>names and icons from agents.json"]
+    DEDUP{"State changed<br/>or Discord reconnected?"}
+    BUILD["Build rich details or bare Playing Orca<br/>text from presence-format.json<br/>names and icons from agents.json"]
   end
 
   DISCORD["Discord desktop app<br/>local IPC socket"]
@@ -217,7 +217,7 @@ Model lookup has limits. Orca does not report models, so the plugin reads saved 
 
 | Problem | Check |
 | --- | --- |
-| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.2` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
+| No readable `orca-plugin.json` | For Git installs, use a URL ending in `.git#v0.2.3` or `.git#main`. For local installs, select the folder that holds `orca-plugin.json`, not its `plugin` subfolder. |
 | `RPC waiting` | Open Discord desktop and wait for the next poll. If it persists, open the plugin's logs in Settings and check the RPC operation and error code. |
 | `RPC paused` | Click RPC to resume. Switching Incognito does not resume paused presence. |
 | No activity | Check that Orca and Discord desktop are open, the plugin is enabled, RPC is not paused, and Discord activity visibility is enabled. A workspace or agent is not required. |
