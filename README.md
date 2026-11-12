@@ -8,7 +8,7 @@ The plugin is TypeScript bundled to JavaScript. It runs in Orca's built-in Node.
 
 ## Preview
 
-These are illustrations of the plugin, not captures from a live session. Real cards vary with your Discord version and theme.
+These are illustrations of the plugin, not captures from a live session. Real cards vary with your Discord version and theme. They show the earlier layout and do not include the new counts.
 
 ![Illustration of the six features: live presence, model on hover, Incognito, repository button, runs inside Orca, and a small bundle](docs/images/features.jpg)
 
@@ -41,7 +41,7 @@ Run one presence provider at a time. Before you install, stop any older one: the
 
 ## Use
 
-With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows Playing Orca and the continuing elapsed timer, with no project, model, custom artwork or button. Discord may still show its normal application icon. Open an agent to show its details; an idle agent keeps its Idle status. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
+With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows Playing Orca and the continuing elapsed timer, with no project, model, custom artwork or button. Discord may still show its normal application icon. Open an agent to show its details. Presence shows the global count of working agents, or zero when none are working. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
 
 The same start timestamp is sent in every view, so leaving a workspace or closing the last agent does not reset playtime. Pausing RPC or closing Orca ends that session. Updating or restarting the plugin starts a new session.
 
@@ -74,6 +74,7 @@ flowchart LR
   subgraph PLUGIN["Plugin worker"]
     SESSION["Session<br/>poll every 15 s + event refresh"]
     STATE["Pick the active workspace<br/>or keep an empty state"]
+    COUNTS["Count working agents<br/>and workspaces with workers"]
     MODEL["Model resolver<br/>reads logs only for an open agent"]
     PRIV{"Incognito on?"}
     HIDE["Folder becomes Private Project<br/>branch and repository button hidden"]
@@ -86,6 +87,7 @@ flowchart LR
 
   EV --> SESSION
   SESSION --> CLI --> STATE
+  CLI --> COUNTS
   STATE --> MODEL
   LOGS --> MODEL
   GIT --> STATE
@@ -93,6 +95,7 @@ flowchart LR
   STATE --> PRIV
   PRIV -- yes --> HIDE --> DEDUP
   PRIV -- no --> DEDUP
+  COUNTS --> DEDUP
   DEDUP -- no --> SKIP["Do nothing"]
   DEDUP -- yes --> BUILD --> DISCORD --> PROFILE
 ```
@@ -153,15 +156,19 @@ Your `config.json` carries over: the plugin reads the same file, so `clientId`, 
 With one active agent, the two lines look like this:
 
 ```text
-Oh My Pi · Working
-📁 your-project
+Codex · 3 agents working
+📁 your-project · 2 active workspaces
 ```
 
-An idle agent shows `Idle`. A `+1` after the agent name counts the other open agent panes: `Oh My Pi +1 · Working`. The status sits on line 1 so narrow Discord popouts still show it.
+The name, folder, icon model and repository follow your selected workspace. The counts cover all workspaces Orca reports, including the selected one. An agent counts only while its state is working; idle, blocked and waiting agents do not count. A workspace counts once when it has at least one working agent. Multiple agents of the same type each count separately.
+
+The display uses 1 agent working and 1 active workspace for singular counts, and shows zero explicitly when no agents are working. The old +N suffix is gone. An idle agent can remain the featured name while other workspaces contribute to the totals.
+
+Within the selected workspace, the existing activity-based selection chooses the featured agent. The model comes from that agent type's saved session metadata for the same workspace. Incognito keeps the totals while replacing the folder with Private Project and hiding the repository button.
 
 | Field | Normal mode | Incognito |
 | --- | --- | --- |
-| Line 2 | `📁` and the active workspace name | `📁 Private Project` |
+| Line 2 | `📁`, the active workspace name, and active workspace count | `📁 Private Project` and active workspace count |
 | Small icon | Featured agent | Same |
 | Icon tooltip | Current model, when detected; otherwise the agent name | Same |
 | Repository button | Workspace's Git `origin`, when valid | Hidden |
@@ -224,7 +231,7 @@ To set a name, icon, or model lookup, add an entry under `agents` in `config.jso
 
 | Field | Meaning |
 | --- | --- |
-| `name` | Text shown on line 1, and in the tooltip when no model is known. |
+| `name` | Leading name shown on line 1, and in the tooltip when no model is known. |
 | `imageUrl` | A public `https` image that Discord can fetch. Used when `useUploadedArt` is off. `http` and loopback addresses do not render. |
 | `asset` | An asset key uploaded to your Discord application. Used only when `useUploadedArt` is `true`. |
 | `modelResolver` | How to find the model: `claude`, `codex`, `omp`, or `antigravity`. Each reads that agent's saved session files. |
