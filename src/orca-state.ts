@@ -70,10 +70,6 @@ export function liveAgents(worktree: OrcaWorktree | null): OrcaAgent[] {
   return allAgents(worktree).filter((agent) => LIVE_AGENT_STATES.has(agent.state ?? ''))
 }
 
-export function hasActiveAgent(worktree: OrcaWorktree | null): boolean {
-  return liveAgents(worktree).length > 0
-}
-
 /**
  * Every agent whose pane is open, whether or not it is mid-turn.
  *

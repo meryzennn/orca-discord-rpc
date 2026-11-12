@@ -104,7 +104,7 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
       readState: async () => {
         stateReads += 1
         if (readState) return readState(abort)
-        return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
+        return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1 }
       },
       transport: {
         apply: async (activity, canPublish) => {
@@ -245,7 +245,7 @@ it('migrates only a legacy boolean before the first push and preserves saved Inc
       await h.lifecycle.activate()
       await setImmediate()
       assert.deepEqual(h.writes, migrated ? [['incognito', expected]] : [])
-      assert.equal(h.activities[0]?.state, expected ? '📁 Private Project' : '📁 secret-project')
+      assert.equal(h.activities[0]?.state, expected ? '📁 Private Project · 1 active workspace' : '📁 secret-project · 1 active workspace')
       if (expected) assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     } finally { await h.lifecycle.deactivate() }
   }
@@ -319,7 +319,7 @@ it('wires native pause/resume, both event refreshes, and live privacy changes', 
     h.change('incognito', true)
     await setImmediate()
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
-    assert.equal(h.activities.at(-1)?.state, '📁 Private Project')
+    assert.equal(h.activities.at(-1)?.state, '📁 Private Project · 1 active workspace')
     assert.ok(!JSON.stringify(h.activities.at(-1)).includes('secret-branch'))
   } finally { await h.lifecycle.deactivate() }
 })
@@ -347,7 +347,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
   const h = harness({ incognito: false, enabled: false }, null, async () => {
     started.resolve()
     await gate.promise
-    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1 }
   })
   try {
     await h.lifecycle.activate()
@@ -358,7 +358,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
     gate.resolve()
     await setImmediate()
     assert.equal(h.activities.length, 1)
-    assert.equal(h.activities[0]?.state, '📁 Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project · 1 active workspace')
     assert.ok(!JSON.stringify(h.activities).includes('secret-project'))
     assert.ok(!JSON.stringify(h.activities).includes('secret-branch'))
     assert.deepEqual(h.order, ['clear', 'apply'])
@@ -379,7 +379,7 @@ it('logs an invalid live setting and continues processing the next valid change'
     await assert.rejects(h.commands.get('presence.toggle')!(), /enabled setting must be boolean/)
     h.change('enabled', true)
     await setImmediate()
-    assert.equal(h.activities[0]?.state, '📁 Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project · 1 active workspace')
   } finally { await h.lifecycle.deactivate() }
 })
 
@@ -424,11 +424,11 @@ it('toggles Incognito from the status bar and synchronizes external settings cha
     await setImmediate()
     assert.deepEqual(h.writes.at(-1), ['incognito', true])
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
-    assert.equal(h.activities.at(-1)?.state, '📁 Private Project')
+    assert.equal(h.activities.at(-1)?.state, '📁 Private Project · 1 active workspace')
     h.change('incognito', false)
     await setImmediate()
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito Off')
-    assert.equal(h.activities.at(-1)?.state, '📁 secret-project')
+    assert.equal(h.activities.at(-1)?.state, '📁 secret-project · 1 active workspace')
   } finally { await h.lifecycle.deactivate() }
 })
 
@@ -477,7 +477,7 @@ it('applies status-bar privacy intent before a pending resume can publish a publ
   const h = harness({ incognito: false, enabled: false }, null, async () => {
     started.resolve()
     await gate.promise
-    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1 }
   })
   try {
     await h.lifecycle.activate()
@@ -488,7 +488,7 @@ it('applies status-bar privacy intent before a pending resume can publish a publ
     gate.resolve()
     await setImmediate()
     assert.equal(h.activities.length, 1)
-    assert.equal(h.activities[0]?.state, '📁 Private Project')
+    assert.equal(h.activities[0]?.state, '📁 Private Project · 1 active workspace')
     assert.ok(!JSON.stringify(h.activities).includes('secret-'))
     assert.equal(h.privacyStatuses.at(-1)?.text, 'Incognito On')
   } finally { gate.resolve(); await h.lifecycle.deactivate() }

@@ -1028,9 +1028,6 @@ function allAgents(worktree) {
 function liveAgents(worktree) {
   return allAgents(worktree).filter((agent) => LIVE_AGENT_STATES.has(agent.state ?? ""));
 }
-function hasActiveAgent(worktree) {
-  return liveAgents(worktree).length > 0;
-}
 function featuredAgent(worktree) {
   const live = liveAgents(worktree);
   const candidates = live.length > 0 ? live : allAgents(worktree);
@@ -1151,7 +1148,6 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoU
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
     ...activityCounts(worktrees),
-    agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
     ...resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {}
   };
@@ -1214,9 +1210,10 @@ var presence_format_default = {
   noAgentState: "",
   folderPrefix: "\u{1F4C1} ",
   separator: " \xB7 ",
-  othersMarker: "+",
-  working: "Working",
-  idle: "Idle",
+  agentWorkingOne: "agent working",
+  agentWorkingMany: "agents working",
+  workspaceActiveOne: "active workspace",
+  workspaceActiveMany: "active workspaces",
   privateProject: "Private Project",
   repositoryButton: "View Repository",
   branchFallback: "Branch"
@@ -1243,19 +1240,25 @@ function clip(value, limit) {
 function field(value) {
   return value.length >= FIELD_MIN ? value : "";
 }
+function countOf(value) {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+}
 function composeText(input) {
   if (input.agentName === null) {
     return { details: FORMAT.noAgentTitle, state: FORMAT.noAgentState, iconText: "" };
   }
-  const count = Number.isFinite(input.runningAgentCount) ? Math.max(0, Math.trunc(input.runningAgentCount)) : 0;
-  const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName));
-  const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, FOLDER_LIMIT) : "";
-  const status = input.agentActive === false ? FORMAT.idle : FORMAT.working;
+  const count = countOf(input.runningAgentCount);
+  const workspaces = countOf(input.activeWorkspaceCount);
+  const agentCount = `${count} ${count === 1 ? FORMAT.agentWorkingOne : FORMAT.agentWorkingMany}`;
+  const workspaceCount = `${workspaces} ${workspaces === 1 ? FORMAT.workspaceActiveOne : FORMAT.workspaceActiveMany}`;
   const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT));
-  const suffix = `${count > 1 ? ` ${FORMAT.othersMarker}${count - 1}` : ""}${FORMAT.separator}${status}`;
+  const agentSuffix = `${FORMAT.separator}${agentCount}`;
+  const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName));
+  const workspaceSuffix = `${FORMAT.separator}${workspaceCount}`;
+  const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, Math.min(FOLDER_LIMIT, FIELD_LIMIT - workspaceSuffix.length)) : "";
   return {
-    details: agent ? `${clip(agent, FIELD_LIMIT - suffix.length)}${suffix}` : "",
-    state: folderLine || status,
+    details: agent ? `${clip(agent, FIELD_LIMIT - agentSuffix.length)}${agentSuffix}` : "",
+    state: folderLine ? `${folderLine}${workspaceSuffix}` : workspaceCount,
     iconText: field(clip(normalizeText(input.model), FIELD_LIMIT)) || agent
   };
 }
@@ -1271,8 +1274,7 @@ function buildActivity(input) {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
-    ...input.model !== void 0 ? { model: input.model } : {},
-    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
+    ...input.model !== void 0 ? { model: input.model } : {}
   });
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback;
@@ -1323,7 +1325,6 @@ function createPresenceController(deps) {
         model: state.model ?? null,
         count: state.runningAgentCount,
         workspaces: state.activeWorkspaceCount,
-        active: state.agentActive,
         branch: state.branchName,
         repo: state.repoUrl ?? null
       });
@@ -1337,7 +1338,6 @@ function createPresenceController(deps) {
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
         activeWorkspaceCount: state.activeWorkspaceCount,
-        agentActive: state.agentActive,
         branchName: state.branchName,
         repoUrl: state.repoUrl ?? null,
         startedAt,
@@ -1548,8 +1548,7 @@ function buildPluginActivity(input) {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
-    ...input.model !== void 0 ? { model: input.model } : {},
-    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
+    ...input.model !== void 0 ? { model: input.model } : {}
   });
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };
   const activity = {

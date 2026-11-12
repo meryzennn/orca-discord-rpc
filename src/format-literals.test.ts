@@ -11,7 +11,8 @@ import ts from 'typescript'
  */
 const FORBIDDEN = [
   'Agent:', 'Folder:', 'Private Project', 'Working', 'Idle', 'Using Orca', 'View Repository', 'Branch', '📁', '·',
-  'Oh My Pi', 'Antigravity', 'OpenCode', 'Qwen Code', 'Command Code', 'Codex', 'Claude'
+  'Oh My Pi', 'Antigravity', 'OpenCode', 'Qwen Code', 'Command Code', 'Codex', 'Claude',
+  'agent working', 'agents working', 'active workspace', 'active workspaces'
 ]
 
 const SOURCE = dirname(fileURLToPath(import.meta.url))

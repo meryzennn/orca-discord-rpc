@@ -11,8 +11,6 @@ export type PresenceInput = {
   runningAgentCount: number
   /** Workspaces containing at least one working agent, across the snapshot. */
   activeWorkspaceCount: number
-  /** False when the featured agent is between turns. */
-  agentActive?: boolean
   /** Shown as the branch icon's tooltip; the second line carries the folder instead. */
   branchName?: string | null
   repoUrl?: string | null
@@ -53,8 +51,7 @@ export function buildActivity(input: PresenceInput): PresenceActivity {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...(input.incognito !== undefined ? { incognito: input.incognito } : {}),
-    ...(input.model !== undefined ? { model: input.model } : {}),
-    ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})
+    ...(input.model !== undefined ? { model: input.model } : {})
   })
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt }
   const branchText = clip(normalizeText(input.incognito ? null : input.branchName), FIELD_LIMIT) || FORMAT.branchFallback

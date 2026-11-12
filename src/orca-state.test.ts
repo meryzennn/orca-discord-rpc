@@ -7,7 +7,6 @@ import {
   allAgents,
   openAgents,
   activityCounts,
-  hasActiveAgent,
   featuredAgent,
   projectNameFor
 } from './orca-state.ts'

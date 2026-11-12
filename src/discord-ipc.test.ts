@@ -126,7 +126,7 @@ it('sends the original elapsed timestamp through empty workspace and agent trans
     let time = start
     const rich: PresenceState = {
       projectName: 'sample', agentType: 'codex', model: 'test-model',
-      runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true, branchName: 'main'
+      runningAgentCount: 1, activeWorkspaceCount: 1, branchName: 'main'
     }
     let state = rich
     const received: Message[] = []
@@ -144,8 +144,8 @@ it('sends the original elapsed timestamp through empty workspace and agent trans
     try {
       for (const next of [
         rich,
-        { projectName: null, agentType: null, runningAgentCount: 0, activeWorkspaceCount: 0, agentActive: false, branchName: null },
-        { ...rich, agentType: null, model: null, runningAgentCount: 0, activeWorkspaceCount: 0, agentActive: false },
+        { projectName: null, agentType: null, runningAgentCount: 0, activeWorkspaceCount: 0, branchName: null },
+        { ...rich, agentType: null, model: null, runningAgentCount: 0, activeWorkspaceCount: 0 },
         rich
       ]) {
         state = next

@@ -5,7 +5,6 @@ import {
   parseWorktreePs,
   selectActiveWorktree,
   featuredAgent,
-  hasActiveAgent,
   projectNameFor,
   branchNameFor,
   activityCounts
@@ -81,7 +80,6 @@ export async function readPresenceState(
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
     ...activityCounts(worktrees),
-    agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
     ...(resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {})
   }

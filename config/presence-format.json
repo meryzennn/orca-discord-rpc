@@ -4,9 +4,10 @@
   "noAgentState": "",
   "folderPrefix": "📁 ",
   "separator": " · ",
-  "othersMarker": "+",
-  "working": "Working",
-  "idle": "Idle",
+  "agentWorkingOne": "agent working",
+  "agentWorkingMany": "agents working",
+  "workspaceActiveOne": "active workspace",
+  "workspaceActiveMany": "active workspaces",
   "privateProject": "Private Project",
   "repositoryButton": "View Repository",
   "branchFallback": "Branch"

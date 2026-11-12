@@ -7,7 +7,6 @@ const STATE: PresenceState = {
   projectName: 'orca',
   agentType: 'claude',
   runningAgentCount: 1, activeWorkspaceCount: 1,
-  agentActive: true,
   branchName: 'main',
 }
 

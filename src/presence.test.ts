@@ -14,7 +14,7 @@ describe('buildActivity (daemon layout)', () => {
         for (const useUploadedArt of [false, true]) {
           assert.deepEqual(buildActivity({
             projectName, agentType: null, model: 'private-model',
-            runningAgentCount: 0, activeWorkspaceCount: 0, agentActive: false,
+            runningAgentCount: 0, activeWorkspaceCount: 0,
             branchName: 'private-branch', repoUrl: 'https://github.com/private/repo',
             startedAt, incognito, useUploadedArt
           }), { details: '', state: '', startTimestamp: startedAt })
@@ -24,28 +24,27 @@ describe('buildActivity (daemon layout)', () => {
   })
 
   it('names the agent and its status on line 1 and the folder on line 2', () => {
-    const activity = buildActivity({ projectName: 'orca', agentType: 'claude', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true, startedAt })
-    assert.equal(activity.details, 'Claude · Working')
-    assert.equal(activity.state, '📁 orca')
+    const activity = buildActivity({ projectName: 'orca', agentType: 'claude', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt })
+    assert.equal(activity.details, 'Claude · 1 agent working')
+    assert.equal(activity.state, '📁 orca · 1 active workspace')
   })
 
-  it('counts every open pane, not each distinct type', () => {
-    const base = { projectName: 'orca', agentType: 'claude', activeWorkspaceCount: 1, agentActive: true, startedAt }
-    assert.equal(buildActivity({ ...base, runningAgentCount: 1 }).details, 'Claude · Working')
-    assert.equal(buildActivity({ ...base, runningAgentCount: 2 }).details, 'Claude +1 · Working')
-    assert.equal(buildActivity({ ...base, runningAgentCount: 3 }).details, 'Claude +2 · Working')
-  })
-
-  it('keeps status on line 1 when the agent is between turns', () => {
-    const activity = buildActivity({ projectName: 'orca', agentType: 'codex', runningAgentCount: 2, activeWorkspaceCount: 1, agentActive: false, startedAt })
-    assert.equal(activity.details, 'Codex +1 · Idle')
-    assert.equal(activity.state, '📁 orca')
+  it('renders working totals without suffixing the selected agent name', () => {
+    for (const [runningAgentCount, activeWorkspaceCount, details] of [
+      [0, 0, 'Claude · 0 agents working'],
+      [1, 1, 'Claude · 1 agent working'],
+      [3, 2, 'Claude · 3 agents working']
+    ] as const) {
+      const activity = buildActivity({ projectName: 'orca', agentType: 'claude',
+        runningAgentCount, activeWorkspaceCount, startedAt })
+      assert.equal(activity.details, details)
+    }
   })
 
   it('replaces the folder and hides the branch in Incognito', () => {
     const activity = buildActivity({ projectName: 'secret', agentType: 'claude', runningAgentCount: 1, activeWorkspaceCount: 1,
       branchName: 'secret-branch', incognito: true, startedAt })
-    assert.equal(activity.state, '📁 Private Project')
+    assert.equal(activity.state, '📁 Private Project · 1 active workspace')
     assert.ok(!JSON.stringify(activity).includes('secret'))
   })
 
@@ -78,7 +77,7 @@ describe('buildActivity (daemon layout)', () => {
   it('falls back to the Orca asset and a generated name for an unknown agent', () => {
     for (const useUploadedArt of [false, true]) {
       const activity = buildActivity({ projectName: 'orca', agentType: 'some-in-house-agent', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt, useUploadedArt })
-      assert.equal(activity.details, 'Some In House Agent · Working')
+      assert.equal(activity.details, 'Some In House Agent · 1 agent working')
       assert.equal(activity.largeImageKey, 'orca')
       assert.equal(activity.largeImageText, 'Some In House Agent')
     }
@@ -92,18 +91,18 @@ describe('buildActivity (daemon layout)', () => {
 
   it('collapses whitespace and control characters in a project name', () => {
     const activity = buildActivity({ projectName: 'my  project\n\ttwo', agentType: 'claude', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt })
-    assert.equal(activity.state, '📁 my project two')
+    assert.equal(activity.state, '📁 my project two · 1 active workspace')
   })
 
   it('omits a one-character project name instead of failing the whole update', () => {
     const activity = buildActivity({ projectName: 'x', agentType: 'claude', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt })
-    assert.equal(activity.state, 'Working')
+    assert.equal(activity.state, '1 active workspace')
   })
 
   it('omits a one-character agent name instead of failing the whole update', () => {
     const activity = buildActivity({ projectName: 'orca', agentType: 'q', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt })
     assert.equal(activity.details, '')
-    assert.equal(activity.state, '📁 orca')
+    assert.equal(activity.state, '📁 orca · 1 active workspace')
   })
 
   it('never emits a single-character field', () => {
@@ -116,9 +115,9 @@ describe('buildActivity (daemon layout)', () => {
   for (const useUploadedArt of [false, true]) {
     it(`uses OMP artwork with useUploadedArt=${useUploadedArt}`, () => {
       const activity = buildActivity({ projectName: 'orca-discord-rpc', agentType: 'omp', runningAgentCount: 2, activeWorkspaceCount: 1,
-        agentActive: true, branchName: 'main', startedAt, useUploadedArt })
-      assert.equal(activity.details, 'Oh My Pi +1 · Working')
-      assert.equal(activity.state, '📁 orca-discord-rpc')
+        branchName: 'main', startedAt, useUploadedArt })
+      assert.equal(activity.details, 'Oh My Pi · 2 agents working')
+      assert.equal(activity.state, '📁 orca-discord-rpc · 1 active workspace')
       assert.equal(activity.largeImageKey, useUploadedArt ? 'omp' : undefined)
       assert.equal(activity.largeImageUrl, useUploadedArt ? undefined : OMP_LOGO)
       assert.equal(activity.smallImageText, 'main')

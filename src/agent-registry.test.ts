@@ -124,7 +124,7 @@ describe('agent registry', () => {
       const config = loadConfig({ env: {}, readConfigFile: () => readConfigFile(path) })
       const registry = createAgentRegistry({ overrides: config.agents })
       const input = { projectName: 'app', agentType: 'new-agent', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt: new Date(0) }
-      assert.equal(buildPluginActivity({ ...input, registry }).details, 'Brand New · Working')
+      assert.equal(buildPluginActivity({ ...input, registry }).details, 'Brand New · 1 agent working')
       assert.equal(buildPluginActivity({ ...input, registry }).smallImageUrl, 'https://example.com/b.png')
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
@@ -152,19 +152,18 @@ describe('plugin and daemon share one registry and one text format', () => {
 
   it('produce the same text and tooltip for every agent, count, status, folder and privacy mode', () => {
     for (const agentType of [...agents, null]) {
-      for (const runningAgentCount of [0, 1, 2, 5]) {
-        for (const agentActive of [true, false]) {
-          for (const projectName of projects) {
-            for (const incognito of [false, true]) {
-              for (const model of [null, 'Claude Opus 5.5']) {
-                const input = { projectName, agentType, runningAgentCount, activeWorkspaceCount: runningAgentCount > 0 ? 1 : 0, agentActive, incognito, model, startedAt, registry }
-                const plugin = buildPluginActivity(input)
-                const daemon = buildActivity(input)
-                const label = JSON.stringify(input.projectName) + ' ' + String(agentType)
-                assert.equal(plugin.details, daemon.details, label)
-                assert.equal(plugin.state, daemon.state, label)
-                if (agentType !== null) assert.equal(plugin.smallImageText, daemon.largeImageText, label)
-              }
+      for (const [runningAgentCount, activeWorkspaceCount] of [[0, 0], [1, 1], [3, 1], [3, 2]] as const) {
+        for (const projectName of projects) {
+          for (const incognito of [false, true]) {
+            for (const model of [null, 'Claude Opus 5.5']) {
+              const input = { projectName, agentType, runningAgentCount,
+                activeWorkspaceCount, incognito, model, startedAt, registry }
+              const plugin = buildPluginActivity(input)
+              const daemon = buildActivity(input)
+              const label = JSON.stringify(input.projectName) + ' ' + String(agentType)
+              assert.equal(plugin.details, daemon.details, label)
+              assert.equal(plugin.state, daemon.state, label)
+              if (agentType !== null) assert.equal(plugin.smallImageText, daemon.largeImageText, label)
             }
           }
         }

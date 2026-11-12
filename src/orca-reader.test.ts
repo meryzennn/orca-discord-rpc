@@ -22,7 +22,7 @@ it('keeps absent selection empty without losing valid background totals', async 
     )
     assert.deepEqual(state, {
       projectName: null, agentType: null, model: null,
-      runningAgentCount, activeWorkspaceCount, agentActive: false, branchName: null, repoUrl: null
+      runningAgentCount, activeWorkspaceCount, branchName: null, repoUrl: null
     })
   }
 })
