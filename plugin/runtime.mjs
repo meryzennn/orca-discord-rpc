@@ -1031,9 +1031,6 @@ function liveAgents(worktree) {
 function hasActiveAgent(worktree) {
   return liveAgents(worktree).length > 0;
 }
-function openAgents(worktree) {
-  return allAgents(worktree);
-}
 function featuredAgent(worktree) {
   const live = liveAgents(worktree);
   const candidates = live.length > 0 ? live : allAgents(worktree);
@@ -1086,8 +1083,15 @@ function branchNameFor(worktree) {
   }
   return branch.replace(/^refs\/heads\//, "");
 }
-function runningAgentCount(worktree) {
-  return openAgents(worktree).length;
+function activityCounts(worktrees) {
+  let runningAgentCount = 0;
+  let activeWorkspaceCount = 0;
+  for (const worktree of worktrees) {
+    const count = allAgents(worktree).filter((agent) => agent.state === "working").length;
+    runningAgentCount += count;
+    if (count > 0) activeWorkspaceCount += 1;
+  }
+  return { runningAgentCount, activeWorkspaceCount };
 }
 
 // src/orca-reader.ts
@@ -1146,7 +1150,7 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoU
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
-    runningAgentCount: runningAgentCount(active),
+    ...activityCounts(worktrees),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
     ...resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {}
@@ -1265,6 +1269,7 @@ function buildActivity(input) {
     projectName: input.projectName,
     agentName: agent?.name ?? null,
     runningAgentCount: input.runningAgentCount,
+    activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}
@@ -1317,6 +1322,7 @@ function createPresenceController(deps) {
         agent: state.agentType,
         model: state.model ?? null,
         count: state.runningAgentCount,
+        workspaces: state.activeWorkspaceCount,
         active: state.agentActive,
         branch: state.branchName,
         repo: state.repoUrl ?? null
@@ -1330,6 +1336,7 @@ function createPresenceController(deps) {
         agentType: state.agentType,
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
+        activeWorkspaceCount: state.activeWorkspaceCount,
         agentActive: state.agentActive,
         branchName: state.branchName,
         repoUrl: state.repoUrl ?? null,
@@ -1539,6 +1546,7 @@ function buildPluginActivity(input) {
     projectName: input.projectName,
     agentName: agent?.name ?? null,
     runningAgentCount: input.runningAgentCount,
+    activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
     ...input.model !== void 0 ? { model: input.model } : {},
     ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {}

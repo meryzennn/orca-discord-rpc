@@ -6,7 +6,10 @@ export type PresenceState = {
   agentType: string | null
   /** The featured agent's model, when its session log names it. */
   model?: string | null
+  /** Agent rows with state working across every workspace. */
   runningAgentCount: number
+  /** Workspaces containing at least one working agent, across the snapshot. */
+  activeWorkspaceCount: number
   /** False when the featured agent is between turns. */
   agentActive: boolean
   /** Shown as the branch icon's tooltip. */
@@ -83,6 +86,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         agent: state.agentType,
         model: state.model ?? null,
         count: state.runningAgentCount,
+        workspaces: state.activeWorkspaceCount,
         active: state.agentActive,
         branch: state.branchName,
         repo: state.repoUrl ?? null
@@ -97,6 +101,7 @@ export function createPresenceController(deps: PresenceControllerDeps): Presence
         agentType: state.agentType,
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
+        activeWorkspaceCount: state.activeWorkspaceCount,
         agentActive: state.agentActive,
         branchName: state.branchName,
         repoUrl: state.repoUrl ?? null,

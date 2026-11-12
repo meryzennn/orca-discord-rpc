@@ -56,7 +56,7 @@ it('publishes an empty Orca session while open and clears only when the process 
 const STATE: PresenceState = {
   projectName: 'orca',
   agentType: 'claude',
-  runningAgentCount: 1,
+  runningAgentCount: 1, activeWorkspaceCount: 1,
   agentActive: true,
   branchName: 'main',
 }

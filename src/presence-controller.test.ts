@@ -46,9 +46,24 @@ const RUNNING: PresenceState = {
   projectName: 'orca',
   agentType: 'claude',
   runningAgentCount: 1,
+  activeWorkspaceCount: 1,
   agentActive: true,
   branchName: 'main',
 }
+
+it('republishes either global counter change with the original timer', async () => {
+  const h = harness({ ...RUNNING, runningAgentCount: 3, activeWorkspaceCount: 1 })
+  await h.controller.poll()
+  h.setNow(T1)
+  h.setState({ ...RUNNING, runningAgentCount: 3, activeWorkspaceCount: 2 })
+  await h.controller.poll()
+  h.setState({ ...RUNNING, runningAgentCount: 4, activeWorkspaceCount: 2 })
+  await h.controller.poll()
+  await h.controller.poll()
+  assert.equal(h.applied.length, 3)
+  assert.deepEqual(h.applied.map(activity => activity.startTimestamp), [T0, T0, T0])
+  assert.equal(h.cleared(), 0)
+})
 
 it('uses the injected tray builder and republishes origin edits without resetting the timer', async () => {
   const applied: PresenceActivity[] = []

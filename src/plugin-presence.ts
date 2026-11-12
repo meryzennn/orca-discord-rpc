@@ -12,6 +12,7 @@ export function buildPluginActivity(input: PresenceInput): PresenceActivity {
     projectName: input.projectName,
     agentName: agent?.name ?? null,
     runningAgentCount: input.runningAgentCount,
+    activeWorkspaceCount: input.activeWorkspaceCount,
     ...(input.incognito !== undefined ? { incognito: input.incognito } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})

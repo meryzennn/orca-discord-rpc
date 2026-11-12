@@ -8,12 +8,12 @@ import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { pluginCliEnv, readPresenceState, runOrcaWorktreePs } from './orca-reader.ts'
 
-it('returns an empty state for valid empty and all-inactive snapshots', async () => {
-  for (const worktrees of [
-    [],
-    [{ isActive: false, path: '/private/project', branch: 'private-branch',
-      agents: [{ agentType: 'claude', state: 'working' }] }]
-  ]) {
+it('keeps absent selection empty without losing valid background totals', async () => {
+  for (const [worktrees, runningAgentCount, activeWorkspaceCount] of [
+    [[], 0, 0],
+    [[{ isActive: false, path: '/private/project', branch: 'private-branch',
+      agents: [{ agentType: 'claude', state: 'working' }] }], 1, 1]
+  ] as const) {
     const snapshot = async () => JSON.stringify({ ok: true, result: { worktrees } })
     const state = await readPresenceState(
       snapshot,
@@ -22,9 +22,37 @@ it('returns an empty state for valid empty and all-inactive snapshots', async ()
     )
     assert.deepEqual(state, {
       projectName: null, agentType: null, model: null,
-      runningAgentCount: 0, agentActive: false, branchName: null, repoUrl: null
+      runningAgentCount, activeWorkspaceCount, agentActive: false, branchName: null, repoUrl: null
     })
   }
+})
+
+it('combines background totals with only the selected workspace identity and lookups', async () => {
+  const modelCalls: unknown[][] = []
+  const repoCalls: string[] = []
+  const state = await readPresenceState(
+    async () => JSON.stringify({ ok: true, result: { worktrees: [
+      { isActive: false, path: '/background', agents: [
+        { agentType: 'omp', state: 'working' },
+        { agentType: 'unregistered-agent', state: 'working' }
+      ] },
+      { isActive: true, path: '/selected', branch: 'refs/heads/selected', agents: [
+        { agentType: 'codex', state: 'done' }
+      ] }
+    ] } }),
+    async path => { repoCalls.push(path); return 'https://github.com/example/selected' },
+    (type, path) => { modelCalls.push([type, path]); return 'selected-model' }
+  )
+  assert.ok(state)
+  assert.equal(state.runningAgentCount, 2)
+  assert.equal(state.activeWorkspaceCount, 1)
+  assert.equal(state.agentType, 'codex')
+  assert.equal(state.projectName, 'selected')
+  assert.equal(state.branchName, 'selected')
+  assert.equal(state.model, 'selected-model')
+  assert.equal(state.repoUrl, 'https://github.com/example/selected')
+  assert.deepEqual(modelCalls, [['codex', '/selected']])
+  assert.deepEqual(repoCalls, ['/selected'])
 })
 
 it('keeps malformed snapshots distinct from empty snapshots and propagates command errors', async () => {

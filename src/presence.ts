@@ -7,7 +7,10 @@ export type PresenceInput = {
   agentType: string | null
   /** The featured agent's model, such as "Claude Opus 5.5", when its session log names it. */
   model?: string | null
+  /** Agent rows with state working across every workspace. */
   runningAgentCount: number
+  /** Workspaces containing at least one working agent, across the snapshot. */
+  activeWorkspaceCount: number
   /** False when the featured agent is between turns. */
   agentActive?: boolean
   /** Shown as the branch icon's tooltip; the second line carries the folder instead. */
@@ -48,6 +51,7 @@ export function buildActivity(input: PresenceInput): PresenceActivity {
     projectName: input.projectName,
     agentName: agent?.name ?? null,
     runningAgentCount: input.runningAgentCount,
+    activeWorkspaceCount: input.activeWorkspaceCount,
     ...(input.incognito !== undefined ? { incognito: input.incognito } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {})

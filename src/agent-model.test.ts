@@ -134,7 +134,7 @@ describe('findAgentModel', () => {
     const sources = { env: noEnv, home }
     assert.equal(findAgentModel('omp', '/home/me/app', sources), 'Claude Sonnet 5.5')
     for (const incognito of [false, true]) {
-      const activity = buildPluginActivity({ projectName: 'app', agentType: 'omp', runningAgentCount: 1,
+      const activity = buildPluginActivity({ projectName: 'app', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1,
         startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true,
         model: findAgentModel('omp', '/home/me/app', sources), incognito })
       assert.equal(activity.smallImageKey, 'omp')
@@ -228,7 +228,7 @@ describe('findAgentModel', () => {
       const activity = buildPluginActivity({
         projectName: 'app',
         agentType: 'antigravity',
-        runningAgentCount: 1,
+        runningAgentCount: 1, activeWorkspaceCount: 1,
         startedAt: new Date('2026-11-06T00:00:00Z'),
         useUploadedArt: true,
         model: findAgentModel('antigravity', '/home/me/app', sources),

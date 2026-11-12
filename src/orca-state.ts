@@ -161,6 +161,16 @@ export function branchNameFor(worktree: OrcaWorktree | null): string | null {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function runningAgentCount(worktree: OrcaWorktree | null): number {
-  return openAgents(worktree).length
+export function activityCounts(worktrees: readonly OrcaWorktree[]): {
+  runningAgentCount: number
+  activeWorkspaceCount: number
+} {
+  let runningAgentCount = 0
+  let activeWorkspaceCount = 0
+  for (const worktree of worktrees) {
+    const count = allAgents(worktree).filter(agent => agent.state === 'working').length
+    runningAgentCount += count
+    if (count > 0) activeWorkspaceCount += 1
+  }
+  return { runningAgentCount, activeWorkspaceCount }
 }

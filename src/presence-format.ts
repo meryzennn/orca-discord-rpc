@@ -47,7 +47,10 @@ export type TextInput = {
   /** Display name of the featured agent; null when no agent is open. */
   agentName: string | null
   model?: string | null
+  /** Agent rows with state working across every workspace. */
   runningAgentCount: number
+  /** Workspaces containing at least one working agent, across the snapshot. */
+  activeWorkspaceCount: number
   /** False when the featured agent is between turns. */
   agentActive?: boolean
 }

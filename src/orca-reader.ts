@@ -8,7 +8,7 @@ import {
   hasActiveAgent,
   projectNameFor,
   branchNameFor,
-  runningAgentCount
+  activityCounts
 } from './orca-state.ts'
 import type { PresenceState } from './presence-controller.ts'
 import { findAgentModel } from './agent-model.ts'
@@ -80,7 +80,7 @@ export async function readPresenceState(
     // Why the agent type and not a label: the builder owns naming and art for it.
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
-    runningAgentCount: runningAgentCount(active),
+    ...activityCounts(worktrees),
     agentActive: hasActiveAgent(active),
     branchName: branchNameFor(active),
     ...(resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {})

@@ -6,7 +6,7 @@ import type { PresenceState } from './presence-controller.ts'
 const STATE: PresenceState = {
   projectName: 'orca',
   agentType: 'claude',
-  runningAgentCount: 1,
+  runningAgentCount: 1, activeWorkspaceCount: 1,
   agentActive: true,
   branchName: 'main',
 }

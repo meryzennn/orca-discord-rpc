@@ -4,7 +4,7 @@ import { buildPluginActivity } from './plugin-presence.ts'
 import { createAgentRegistry } from './agent-registry.ts'
 
 const base = {
-  projectName: 'sample', agentType: 'claude', runningAgentCount: 2,
+  projectName: 'sample', agentType: 'claude', runningAgentCount: 2, activeWorkspaceCount: 1,
   branchName: 'feature/work', startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true
 }
 const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=256'
@@ -169,7 +169,7 @@ describe('limits and unicode', () => {
 
   it('keeps the count and status when the agent name is too long', () => {
     const registry = createAgentRegistry({ overrides: { claude: { name: '😀'.repeat(200) } } })
-    const activity = buildPluginActivity({ ...base, runningAgentCount: 3, registry })
+    const activity = buildPluginActivity({ ...base, runningAgentCount: 3, activeWorkspaceCount: 1, registry })
     assert.ok(activity.details.endsWith(' +2 · Working'))
     assert.ok(activity.details.length <= 128)
     assert.doesNotMatch(activity.details, LONE_SURROGATE)

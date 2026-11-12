@@ -10,7 +10,7 @@ import { createDiscordPresence } from './discord.ts'
 import { readPresenceState } from './orca-reader.ts'
 
 const state: PresenceState = {
-  projectName: 'secret-project', agentType: 'omp', runningAgentCount: 1,
+  projectName: 'secret-project', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1,
   agentActive: true, branchName: 'secret-branch', repoUrl: 'https://github.com/secret-owner/secret-repo'
 }
 

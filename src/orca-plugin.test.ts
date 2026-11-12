@@ -104,7 +104,7 @@ function harness(values: Record<string, unknown> = {}, legacy: ConfigFile | null
       readState: async () => {
         stateReads += 1
         if (readState) return readState(abort)
-        return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
+        return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
       },
       transport: {
         apply: async (activity, canPublish) => {
@@ -347,7 +347,7 @@ it('forwards Incognito intent during a pending resume before publishing any publ
   const h = harness({ incognito: false, enabled: false }, null, async () => {
     started.resolve()
     await gate.promise
-    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
   })
   try {
     await h.lifecycle.activate()
@@ -477,7 +477,7 @@ it('applies status-bar privacy intent before a pending resume can publish a publ
   const h = harness({ incognito: false, enabled: false }, null, async () => {
     started.resolve()
     await gate.promise
-    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, agentActive: true }
+    return { projectName: 'secret-project', branchName: 'secret-branch', agentType: 'omp', runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: true }
   })
   try {
     await h.lifecycle.activate()

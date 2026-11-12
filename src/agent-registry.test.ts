@@ -123,7 +123,7 @@ describe('agent registry', () => {
       writeFileSync(path, JSON.stringify({ agents: { 'new-agent': { name: 'Brand New', imageUrl: 'https://example.com/b.png' } } }))
       const config = loadConfig({ env: {}, readConfigFile: () => readConfigFile(path) })
       const registry = createAgentRegistry({ overrides: config.agents })
-      const input = { projectName: 'app', agentType: 'new-agent', runningAgentCount: 1, startedAt: new Date(0) }
+      const input = { projectName: 'app', agentType: 'new-agent', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt: new Date(0) }
       assert.equal(buildPluginActivity({ ...input, registry }).details, 'Brand New · Working')
       assert.equal(buildPluginActivity({ ...input, registry }).smallImageUrl, 'https://example.com/b.png')
     } finally { rmSync(root, { recursive: true, force: true }) }
@@ -157,7 +157,7 @@ describe('plugin and daemon share one registry and one text format', () => {
           for (const projectName of projects) {
             for (const incognito of [false, true]) {
               for (const model of [null, 'Claude Opus 5.5']) {
-                const input = { projectName, agentType, runningAgentCount, agentActive, incognito, model, startedAt, registry }
+                const input = { projectName, agentType, runningAgentCount, activeWorkspaceCount: runningAgentCount > 0 ? 1 : 0, agentActive, incognito, model, startedAt, registry }
                 const plugin = buildPluginActivity(input)
                 const daemon = buildActivity(input)
                 const label = JSON.stringify(input.projectName) + ' ' + String(agentType)
@@ -174,7 +174,7 @@ describe('plugin and daemon share one registry and one text format', () => {
 
   it('resolve every built-in agent to the same name in both layouts', () => {
     for (const agentType of agents) {
-      const input = { projectName: 'sample', agentType, runningAgentCount: 1, startedAt, registry }
+      const input = { projectName: 'sample', agentType, runningAgentCount: 1, activeWorkspaceCount: 1, startedAt, registry }
       const name = registry.resolve(agentType).name
       assert.equal(buildPluginActivity(input).details, buildActivity(input).details)
       if (name.length >= 2) assert.ok(buildPluginActivity(input).details.startsWith(name), agentType)
