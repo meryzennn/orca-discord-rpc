@@ -306,13 +306,13 @@ var agents_default = {
     claude: {
       name: "Claude",
       asset: "claude",
-      imageUrl: "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      imageUrl: "https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-png/dark/claude-color.png",
       modelResolver: "claude"
     },
     "claude-agent-teams": {
       name: "Claude",
       asset: "claude",
-      imageUrl: "https://www.google.com/s2/favicons?domain=claude.ai&sz=256",
+      imageUrl: "https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-png/dark/claude-color.png",
       modelResolver: "claude"
     },
     codex: {

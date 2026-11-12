@@ -4,7 +4,7 @@ import { buildActivity } from './presence.ts'
 
 const startedAt = new Date('2026-10-05T00:00:00.000Z')
 const OMP_LOGO = 'https://raw.githubusercontent.com/can1357/oh-my-pi/75e7801e247d4e3263439d4cc08ccad60dc64bdd/packages/collab-web/public/favicon-512x512.png'
-const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=256'
+const CLAUDE_FAVICON = 'https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-png/dark/claude-color.png'
 const BRANCH_FAVICON = 'https://www.google.com/s2/favicons?domain=git-scm.com&sz=128'
 
 describe('buildActivity (daemon layout)', () => {

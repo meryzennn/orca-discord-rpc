@@ -7,7 +7,7 @@ const base = {
   projectName: 'sample', agentType: 'claude', runningAgentCount: 2, activeWorkspaceCount: 1,
   branchName: 'feature/work', startedAt: new Date('2026-11-06T00:00:00Z'), useUploadedArt: true
 }
-const CLAUDE_FAVICON = 'https://www.google.com/s2/favicons?domain=claude.ai&sz=256'
+const CLAUDE_FAVICON = 'https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-png/dark/claude-color.png'
 /** With the u flag this matches only an unpaired surrogate, i.e. a character cut in half. */
 const LONE_SURROGATE = /[\uD800-\uDFFF]/u
 const ORCA_FAVICON = 'https://www.google.com/s2/favicons?domain=onorca.dev&sz=256'
