@@ -2,7 +2,10 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPresenceController, type PresenceState } from './presence-controller.ts'
 import { buildPluginActivity } from './plugin-presence.ts'
-import type { PresenceActivity } from './presence.ts'
+import { buildActivity, type PresenceActivity } from './presence.ts'
+import { readPresenceState } from './orca-reader.ts'
+import { builtinRegistry } from './agent-registry.ts'
+import type { OrcaWorktree } from './orca-state.ts'
 
 const T0 = new Date('2026-10-05T00:00:00.000Z')
 const T1 = new Date('2026-10-05T00:01:00.000Z')
@@ -60,6 +63,12 @@ it('republishes either global counter change with the original timer', async () 
   await h.controller.poll()
   await h.controller.poll()
   assert.equal(h.applied.length, 3)
+  assert.deepEqual(h.applied.map(activity => activity.details), [
+    'Claude · 3 agents working', 'Claude · 3 agents working', 'Claude · 4 agents working'
+  ])
+  assert.deepEqual(h.applied.map(activity => activity.state), [
+    '📁 orca · 1 active workspace', '📁 orca · 2 active workspaces', '📁 orca · 2 active workspaces'
+  ])
   assert.deepEqual(h.applied.map(activity => activity.startTimestamp), [T0, T0, T0])
   assert.equal(h.cleared(), 0)
 })
@@ -255,5 +264,69 @@ describe('createPresenceController', () => {
     await controller.poll()
     await controller.poll()
     assert.equal(calls, 2)
+  })
+
+  it('switches identity, model and repository together while totals and timer remain global', async () => {
+    for (const build of [buildActivity, buildPluginActivity]) {
+      let selected = 0
+      let now = T0
+      const workspaces: OrcaWorktree[] = [
+        { path: '/first', branch: 'first-branch', agents: [
+          { agentType: 'codex', state: 'working' }
+        ] },
+        { path: '/second', branch: 'second-branch', agents: [
+          { agentType: 'omp', state: 'working', stateStartedAt: 1760000000001 },
+          { agentType: 'omp', state: 'working', stateStartedAt: 1760000000000 }
+        ] }
+      ]
+      const models: unknown[][] = []
+      const repos: string[] = []
+      const sent: PresenceActivity[] = []
+      const controller = createPresenceController({
+        readState: () => readPresenceState(
+          async () => JSON.stringify({ ok: true, result: { worktrees:
+            workspaces.map((workspace, index) => ({ ...workspace, isActive: index === selected }))
+          } }),
+          async path => { repos.push(path); return `https://github.com/example${path}` },
+          (type, path) => { models.push([type, path]); return `${type}-${path}-model` }
+        ),
+        buildActivity: input => build({ ...input, useUploadedArt: true }),
+        apply: async activity => { sent.push(activity); return true },
+        clear: async () => { throw new Error('Workspace switch must not clear') },
+        now: () => now
+      })
+      await controller.poll()
+      now = T1
+      selected = 1
+      await controller.poll()
+      assert.deepEqual(sent.map(activity => activity.details), [
+        'Codex · 3 agents working', 'Oh My Pi · 3 agents working'
+      ])
+      assert.deepEqual(sent.map(activity => activity.state), [
+        '📁 first · 2 active workspaces', '📁 second · 2 active workspaces'
+      ])
+      assert.deepEqual(sent.map(activity => activity.startTimestamp), [T0, T0])
+      assert.deepEqual(models, [['codex', '/first'], ['omp', '/second']])
+      assert.deepEqual(repos, ['/first', '/second'])
+      const last = sent[1]!
+      if (build === buildPluginActivity) {
+        assert.equal(last.smallImageKey, builtinRegistry.resolve('omp').asset)
+        assert.equal(last.smallImageText, 'omp-/second-model')
+        assert.deepEqual(last.buttons, [{ label: 'View Repository', url: 'https://github.com/example/second' }])
+      } else {
+        assert.equal(last.largeImageKey, builtinRegistry.resolve('omp').asset)
+        assert.equal(last.largeImageText, 'omp-/second-model')
+        assert.equal(last.smallImageText, 'second-branch')
+        assert.equal(last.buttons, undefined)
+      }
+
+      workspaces[1]!.agents = []
+      await controller.poll()
+      assert.deepEqual(sent.at(-1), { details: '', state: '', startTimestamp: T0 })
+      selected = -1
+      await controller.poll()
+      assert.deepEqual(sent.at(-1), { details: '', state: '', startTimestamp: T0 })
+      assert.equal(models.length, 2, 'Background model lookup is forbidden')
+    }
   })
 })

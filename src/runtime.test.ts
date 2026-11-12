@@ -284,4 +284,40 @@ describe('createPresenceRuntime', () => {
     await h.instance.start()
     assert.equal(h.instance.getStatus().paused, false)
   })
+
+  it('publishes global background changes through the headless runtime', async () => {
+    let background = 1
+    const sent: PresenceActivity[] = []
+    const instance = createPresenceRuntime({
+      clientId: '1', pollMs: 15000, useUploadedArt: false,
+      deps: {
+        isOrcaRunning: async () => true,
+        readState: () => readPresenceState(
+          async () => JSON.stringify({ ok: true, result: { worktrees: [
+            { isActive: true, path: '/selected', agents: [{ agentType: 'codex', state: 'done' }] },
+            { isActive: false, agents: Array.from({ length: background },
+              () => ({ agentType: 'omp', state: 'working' })) }
+          ] } }),
+          undefined,
+          () => 'selected-model'
+        ),
+        apply: async activity => { sent.push(activity); return true },
+        clear: async () => true,
+        schedule: () => () => {}
+      }
+    })
+    try {
+      await instance.start()
+      background = 2
+      await instance.start()
+      assert.deepEqual(sent.map(activity => activity.details), [
+        'Codex · 1 agent working', 'Codex · 2 agents working'
+      ])
+      assert.equal(sent[1]?.state, '📁 selected · 1 active workspace')
+      assert.equal(sent[1]?.largeImageText, 'selected-model')
+      assert.equal(sent[1]?.startTimestamp, sent[0]?.startTimestamp)
+    } finally {
+      await instance.stop()
+    }
+  })
 })

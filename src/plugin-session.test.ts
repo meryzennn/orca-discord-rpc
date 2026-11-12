@@ -635,3 +635,52 @@ it('recovers on the scheduled poll after a failed privacy reconnect without anot
     assert.ok(!JSON.stringify(sent.at(-1)).includes('secret-'))
   } finally { await session.stop() }
 })
+
+it('updates background totals while keeping selected identity through privacy and pause', async () => {
+  let background = 2
+  const h = harness({
+    incognito: false,
+    readState: () => readPresenceState(
+      async () => JSON.stringify({ ok: true, result: { worktrees: [
+        { isActive: true, path: '/selected', agents: [{ agentType: 'codex', state: 'done' }] },
+        { isActive: false, path: '/background', agents: Array.from({ length: background },
+          () => ({ agentType: 'unregistered-agent', state: 'working' })) }
+      ] } }),
+      async path => {
+        assert.equal(path, '/selected')
+        return 'https://github.com/example/selected'
+      },
+      (type, path) => {
+        assert.deepEqual([type, path], ['codex', '/selected'])
+        return 'selected-model'
+      }
+    )
+  })
+  try {
+    await h.session.refresh()
+    const start = h.pushed[0]!.startTimestamp
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 2 agents working')
+    background = 3
+    h.tick()
+    await h.session.refresh()
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 3 agents working')
+    await h.session.setIncognito(true)
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.smallImageText, 'selected-model')
+    assert.equal(h.pushed.at(-1)?.buttons, undefined)
+    assert.equal(h.pushed.at(-1)?.startTimestamp, start)
+    assert.ok(!JSON.stringify(h.pushed.at(-1)).includes('/background'))
+
+    await h.session.setEnabled(false)
+    const paused = h.pushed.length
+    background = 0
+    h.tick()
+    await h.session.refresh()
+    assert.equal(h.pushed.length, paused)
+    await h.session.setEnabled(true)
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 0 agents working')
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 0 active workspaces')
+  } finally {
+    await h.session.stop()
+  }
+})
