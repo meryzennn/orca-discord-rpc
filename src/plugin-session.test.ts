@@ -112,7 +112,7 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
     }] } })
     await h.session.refresh()
     assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), now)
-    assert.equal(h.pushed.at(-1)?.state, '📁 project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.state, '📁 project · 1 workspace')
 
     mock.timers.tick(60000)
     stdout = empty
@@ -137,7 +137,7 @@ it('keeps empty sessions alive across agent transitions, privacy, reconnect and 
       agents: [{ agentType: 'claude', state: 'done' }]
     }] } })
     await h.session.refresh()
-    assert.equal(h.pushed.at(-1)?.details, 'Claude · 0 agents working')
+    assert.equal(h.pushed.at(-1)?.details, 'Claude · 1 agent · Idle')
     assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), now)
 
     stdout = empty
@@ -190,7 +190,7 @@ it('omits unused large artwork from plugin push logs', async () => {
   try {
     await h.session.refresh()
     assert.deepEqual(h.logs.filter(line => line.startsWith('pushed:')), [
-      'pushed: Oh My Pi · 1 agent working | 📁 Private Project · 1 active workspace'
+      'pushed: Oh My Pi · 1 agent · Working | 📁 Private Project · 1 workspace'
     ])
     assert.ok(h.pushed[0]?.smallImageUrl)
   } finally {
@@ -205,13 +205,13 @@ it('redacts private state before the reused builder and clears before changing p
   assert.ok(!json.includes('secret-project'))
   assert.ok(!json.includes('secret-branch'))
   assert.ok(!json.includes('secret-repo'))
-  assert.equal(h.pushed[0]?.state, '📁 Private Project · 1 active workspace')
-  assert.equal(h.pushed[0]?.details, 'Oh My Pi · 1 agent working')
+  assert.equal(h.pushed[0]?.state, '📁 Private Project · 1 workspace')
+  assert.equal(h.pushed[0]?.details, 'Oh My Pi · 1 agent · Working')
   assert.equal(h.pushed[0]?.smallImageText, 'Oh My Pi')
   assert.equal(h.pushed[0]?.buttons, undefined)
   await h.session.setIncognito(false)
   assert.deepEqual(h.order, ['apply', 'clear', 'apply'])
-  assert.equal(h.pushed[1]?.state, '📁 secret-project · 1 active workspace')
+  assert.equal(h.pushed[1]?.state, '📁 secret-project · 1 workspace')
   assert.equal(h.pushed[1]?.smallImageText, 'Oh My Pi')
   assert.deepEqual(h.pushed[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/secret-owner/secret-repo' }])
   await h.session.stop()
@@ -225,11 +225,11 @@ it('preserves the Playing session timer when toggling Incognito in either direct
     const started = h.pushed[0]!.startTimestamp!.getTime()
     mock.timers.tick(60000)
     await h.session.setIncognito(true)
-    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 workspace')
     assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     mock.timers.tick(60000)
     await h.session.setIncognito(false)
-    assert.equal(h.pushed.at(-1)?.state, '📁 secret-project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.state, '📁 secret-project · 1 workspace')
     assert.equal(h.pushed.at(-1)?.startTimestamp!.getTime(), started)
     assert.deepEqual(h.order, ['apply', 'clear', 'apply', 'clear', 'apply'])
   } finally { await h.session.stop(); mock.timers.reset() }
@@ -249,7 +249,7 @@ it('starts a new session timer after an explicit null clear, including in Incogn
     current = state
     mock.timers.tick(60000)
     await h.session.refresh()
-    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 workspace')
     assert.ok(h.pushed.at(-1)!.startTimestamp!.getTime() > started)
   } finally { await h.session.stop(); mock.timers.reset() }
 })
@@ -284,7 +284,7 @@ it('clears the previous activity before a pending poll republishes changed priva
   gate.resolve()
   await Promise.all([pending, privateMode])
   assert.deepEqual(h.order, ['apply', 'clear', 'apply'])
-  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 active workspace')
+  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 workspace')
   assert.ok(!JSON.stringify(h.pushed[1]).includes('secret-branch'))
   await h.session.stop()
 })
@@ -326,7 +326,7 @@ it('starts paused and uses the latest privacy setting on resume', async () => {
   assert.equal(h.reads(), 0)
   assert.deepEqual(h.order, ['clear'])
   await h.session.setEnabled(true)
-  assert.equal(h.pushed[0]?.state, '📁 Private Project · 1 active workspace')
+  assert.equal(h.pushed[0]?.state, '📁 Private Project · 1 workspace')
   await h.session.setEnabled(true)
   await h.session.setIncognito(true)
   assert.equal(h.reads(), 1)
@@ -391,7 +391,7 @@ it('prevents a public request after Incognito intent during real transport login
   const privateMode = h.session.setIncognito(true)
   h.gate.resolve()
   await Promise.all([pending, privateMode])
-  assert.deepEqual(h.order, ['login', 'clear', 'send:📁 Private Project · 1 active workspace'])
+  assert.deepEqual(h.order, ['login', 'clear', 'send:📁 Private Project · 1 workspace'])
   assert.equal(h.sent.length, 1)
   assert.ok(!JSON.stringify(h.sent).includes('secret-project'))
   assert.ok(!JSON.stringify(h.sent).includes('secret-branch'))
@@ -432,7 +432,7 @@ it('closes the old socket after a failed privacy clear before republishing', asy
   await h.session.refresh()
   await h.session.setIncognito(true)
   assert.deepEqual(h.order, ['apply', 'clear', 'destroy', 'apply'])
-  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 active workspace')
+  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 workspace')
   assert.ok(h.logs.includes('clear failed'))
   await assert.rejects(h.session.stop(), /clear failed/)
 })
@@ -445,7 +445,7 @@ it('closes the old public socket when privacy changes while paused after a faile
   assert.deepEqual(h.order, ['apply', 'clear', 'clear', 'destroy'])
   assert.equal(h.reads(), 1)
   await h.session.setEnabled(true)
-  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 active workspace')
+  assert.equal(h.pushed[1]?.state, '📁 Private Project · 1 workspace')
   await assert.rejects(h.session.stop(), /clear failed/)
 })
 
@@ -605,7 +605,7 @@ it('recovers on the scheduled poll after a failed privacy reconnect without anot
         },
         setActivity: async activity => {
           sent.push(activity)
-          if (activity.state === '📁 Private Project · 1 active workspace') recovered.resolve()
+          if (activity.state === '📁 Private Project · 1 workspace') recovered.resolve()
         }
       }
     }
@@ -659,13 +659,13 @@ it('updates background totals while keeping selected identity through privacy an
   try {
     await h.session.refresh()
     const start = h.pushed[0]!.startTimestamp
-    assert.equal(h.pushed.at(-1)?.details, 'Codex · 2 agents working')
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 3 agents · Idle')
     background = 3
     h.tick()
     await h.session.refresh()
-    assert.equal(h.pushed.at(-1)?.details, 'Codex · 3 agents working')
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 4 agents · Idle')
     await h.session.setIncognito(true)
-    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 active workspace')
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 2 workspaces')
     assert.equal(h.pushed.at(-1)?.smallImageText, 'selected-model')
     assert.equal(h.pushed.at(-1)?.buttons, undefined)
     assert.equal(h.pushed.at(-1)?.startTimestamp, start)
@@ -678,8 +678,8 @@ it('updates background totals while keeping selected identity through privacy an
     await h.session.refresh()
     assert.equal(h.pushed.length, paused)
     await h.session.setEnabled(true)
-    assert.equal(h.pushed.at(-1)?.details, 'Codex · 0 agents working')
-    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 0 active workspaces')
+    assert.equal(h.pushed.at(-1)?.details, 'Codex · 1 agent · Idle')
+    assert.equal(h.pushed.at(-1)?.state, '📁 Private Project · 1 workspace')
   } finally {
     await h.session.stop()
   }

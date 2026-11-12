@@ -41,7 +41,7 @@ Run one presence provider at a time. Before you install, stop any older one: the
 
 ## Use
 
-With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows Playing Orca and the continuing elapsed timer, with no project, model, custom artwork or button. Discord may still show its normal application icon. Open an agent to show its details. Presence shows the global count of working agents, or zero when none are working. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
+With RPC enabled, Orca stays visible on Discord while the app is open. Without an active workspace or an open agent, the card shows Playing Orca and the continuing elapsed timer, with no project, model, custom artwork or button. Discord may still show its normal application icon. Open an agent to show its details. Presence shows the global count of open agents, their workspaces, and the Working or Idle status of the selected agent. Presence follows workspace, agent and model changes, polling every 15 seconds by default.
 
 The same start timestamp is sent in every view, so leaving a workspace or closing the last agent does not reset playtime. Pausing RPC or closing Orca ends that session. Updating or restarting the plugin starts a new session.
 
@@ -156,19 +156,18 @@ Your `config.json` carries over: the plugin reads the same file, so `clientId`, 
 With one active agent, the two lines look like this:
 
 ```text
-Codex · 3 agents working
-📁 your-project · 2 active workspaces
+Codex · 3 agents · Working
+📁 your-project · 2 workspaces
 ```
 
-The name, folder, icon model and repository follow your selected workspace. The counts cover all workspaces Orca reports, including the selected one. An agent counts only while its state is working; idle, blocked and waiting agents do not count. A workspace counts once when it has at least one working agent. Multiple agents of the same type each count separately.
+The name, folder, icon model and repository follow your selected workspace. The counts cover all workspaces Orca reports, including the selected one. An agent counts while its pane is open; idle and working agents both count towards the total. A workspace counts once when it has at least one agent open. The status at the end of line 1 reflects whether the selected workspace's agent is Working or Idle.
 
-The display uses 1 agent working and 1 active workspace for singular counts, and shows zero explicitly when no agents are working. The old +N suffix is gone. An idle agent can remain the featured name while other workspaces contribute to the totals.
-
-Within the selected workspace, the existing activity-based selection chooses the featured agent. The model comes from that agent type's saved session metadata for the same workspace. Incognito keeps the totals while replacing the folder with Private Project and hiding the repository button.
+The display uses 1 agent and 1 workspace for singular counts. The old +N suffix is gone. Within the selected workspace, the existing activity-based selection chooses the featured agent. The model comes from that agent type's saved session metadata for the same workspace. Incognito keeps the totals while replacing the folder with Private Project and hiding the repository button.
 
 | Field | Normal mode | Incognito |
 | --- | --- | --- |
-| Line 2 | `📁`, the active workspace name, and active workspace count | `📁 Private Project` and active workspace count |
+| Line 1 | Featured agent name, agent count, and `Working` / `Idle` status | Same |
+| Line 2 | `📁`, the active workspace name, and workspace count | `📁 Private Project` and workspace count |
 | Small icon | Featured agent | Same |
 | Icon tooltip | Current model, when detected; otherwise the agent name | Same |
 | Repository button | Workspace's Git `origin`, when valid | Hidden |

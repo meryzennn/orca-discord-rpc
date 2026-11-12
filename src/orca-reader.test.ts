@@ -22,7 +22,7 @@ it('keeps absent selection empty without losing valid background totals', async 
     )
     assert.deepEqual(state, {
       projectName: null, agentType: null, model: null,
-      runningAgentCount, activeWorkspaceCount, branchName: null, repoUrl: null
+      runningAgentCount, activeWorkspaceCount, agentActive: false, branchName: null, repoUrl: null
     })
   }
 })
@@ -44,8 +44,9 @@ it('combines background totals with only the selected workspace identity and loo
     (type, path) => { modelCalls.push([type, path]); return 'selected-model' }
   )
   assert.ok(state)
-  assert.equal(state.runningAgentCount, 2)
-  assert.equal(state.activeWorkspaceCount, 1)
+  assert.equal(state.runningAgentCount, 3)
+  assert.equal(state.activeWorkspaceCount, 2)
+  assert.equal(state.agentActive, false)
   assert.equal(state.agentType, 'codex')
   assert.equal(state.projectName, 'selected')
   assert.equal(state.branchName, 'selected')

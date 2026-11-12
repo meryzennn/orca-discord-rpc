@@ -64,10 +64,10 @@ it('republishes either global counter change with the original timer', async () 
   await h.controller.poll()
   assert.equal(h.applied.length, 3)
   assert.deepEqual(h.applied.map(activity => activity.details), [
-    'Claude · 3 agents working', 'Claude · 3 agents working', 'Claude · 4 agents working'
+    'Claude · 3 agents · Working', 'Claude · 3 agents · Working', 'Claude · 4 agents · Working'
   ])
   assert.deepEqual(h.applied.map(activity => activity.state), [
-    '📁 orca · 1 active workspace', '📁 orca · 2 active workspaces', '📁 orca · 2 active workspaces'
+    '📁 orca · 1 workspace', '📁 orca · 2 workspaces', '📁 orca · 2 workspaces'
   ])
   assert.deepEqual(h.applied.map(activity => activity.startTimestamp), [T0, T0, T0])
   assert.equal(h.cleared(), 0)
@@ -88,8 +88,8 @@ it('uses the injected tray builder and republishes origin edits without resettin
   state = { ...state, repoUrl: 'https://github.com/owner/second' }
   await controller.poll()
   assert.equal(applied.length, 2)
-  assert.equal(applied[0]?.details, 'Claude · 1 agent working')
-  assert.equal(applied[1]?.state, '📁 orca · 1 active workspace')
+  assert.equal(applied[0]?.details, 'Claude · 1 agent · Working')
+  assert.equal(applied[1]?.state, '📁 orca · 1 workspace')
   assert.deepEqual(applied[1]?.buttons, [{ label: 'View Repository', url: 'https://github.com/owner/second' }])
   assert.equal(applied[1]?.startTimestamp, T0)
 })
@@ -111,7 +111,7 @@ describe('createPresenceController', () => {
     const h = harness(RUNNING)
     await h.controller.poll()
     assert.equal(h.applied.length, 1)
-    assert.equal(h.applied[0]?.details, 'Claude · 1 agent working')
+    assert.equal(h.applied[0]?.details, 'Claude · 1 agent · Working')
   })
 
   it('does not re-apply an unchanged reading', async () => {
@@ -128,7 +128,7 @@ describe('createPresenceController', () => {
     h.setState({ ...RUNNING, runningAgentCount: 2 })
     await h.controller.poll()
     assert.equal(h.applied.length, 2)
-    assert.equal(h.applied[1]?.details, 'Claude · 2 agents working')
+    assert.equal(h.applied[1]?.details, 'Claude · 2 agents · Working')
   })
 
   it('applies when a different agent takes over', async () => {
@@ -136,7 +136,7 @@ describe('createPresenceController', () => {
     await h.controller.poll()
     h.setState({ ...RUNNING, agentType: 'codex' })
     await h.controller.poll()
-    assert.equal(h.applied[1]?.details, 'Codex · 1 agent working')
+    assert.equal(h.applied[1]?.details, 'Codex · 1 agent · Working')
   })
 
   it('applies when the model changes', async () => {
@@ -300,10 +300,10 @@ describe('createPresenceController', () => {
       selected = 1
       await controller.poll()
       assert.deepEqual(sent.map(activity => activity.details), [
-        'Codex · 3 agents working', 'Oh My Pi · 3 agents working'
+        'Codex · 3 agents · Working', 'Oh My Pi · 3 agents · Working'
       ])
       assert.deepEqual(sent.map(activity => activity.state), [
-        '📁 first · 2 active workspaces', '📁 second · 2 active workspaces'
+        '📁 first · 2 workspaces', '📁 second · 2 workspaces'
       ])
       assert.deepEqual(sent.map(activity => activity.startTimestamp), [T0, T0])
       assert.deepEqual(models, [['codex', '/first'], ['omp', '/second']])

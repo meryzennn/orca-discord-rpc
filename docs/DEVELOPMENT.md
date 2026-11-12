@@ -85,19 +85,19 @@ Empty-presence acceptance:
 
 1. Use only one provider. Open Orca with no active workspace, enable RPC, and inspect a Discord profile. Expect Playing Orca with an elapsed timer and no project or agent details.
 2. Open a workspace without agents, including one containing only a plain terminal. Expect the same bare activity in normal and Incognito modes.
-3. Start an agent, let it become idle, then close its pane. Expect the existing rich card, then 0 agents working, then bare Playing Orca. Old project, model, branch, custom artwork and repository data must disappear.
+3. Start an agent, let it become idle, then close its pane. Expect the existing rich card, then Idle, then bare Playing Orca. Old project, model, branch, custom artwork and repository data must disappear.
 4. Note the elapsed time, leave the workspace, then return to an agent. Expect the timer to continue from the same start in every view, including the empty interval.
 5. Restart Discord while Orca remains empty. Expect automatic republishing after reconnect.
 6. Pause RPC while empty. Expect no activity until resumed. Disable the plugin and close Orca in separate checks; each must remove the activity.
 7. Disable the plugin before checking the headless daemon. Start the daemon with Orca open and empty; expect the same bare activity. Close Orca; expect clear. Stop the daemon before re-enabling the plugin.
 
-Global activity-count acceptance:
+Global agent and workspace count acceptance:
 
-1. Open two workspaces. In A, run one agent and keep an idle agent open; in B, run two agents. Select A. Expect the featured A agent, A folder/model/repository, 3 agents working and 2 active workspaces.
+1. Open two workspaces. In A, run one agent and keep an idle agent open; in B, run one agent. Select A. Expect the featured A agent, A folder/model/repository, 3 agents and 2 workspaces, with Working status when A is working.
 2. Select B without changing workers. Expect B identity, model artwork/tooltip and repository, with the same totals and timer. No +N suffix appears.
-3. Leave A selected and finish one B agent. Expect the worker total to change on the event refresh or next poll. Finish B's remaining worker; the workspace count drops too.
-4. Make A's agents idle while B works. Keep A's identity and show B's contribution only in the totals. Check blocked and waiting agents are excluded.
-5. Finish all workers. With a selected agent pane still open, expect 0 agents working and 0 active workspaces. Close the selected workspace's last agent; expect the existing bare Playing Orca with its continuing timer.
+3. Make A's agent idle while keeping B open. Line 1 status switches to Idle while totals remain 3 agents and 2 workspaces.
+4. Close all agents in B. Expect the totals to update to 2 agents and 1 workspace.
+5. Close the selected workspace's last agent; expect the existing bare Playing Orca with its continuing timer.
 6. Toggle Incognito, pause/resume, and restart Discord. Check counts, selected identity and clock behavior; private folder/branch/repository data must stay hidden.
 7. Repeat the count and selection checks with the headless daemon as the only provider. Its text matches the plugin; its agent/model remains on the large icon and branch on the small icon.
 8. Check long project/custom agent names and Unicode in desktop/mobile Discord. Totals must survive text clipping, with no split emoji or rejected activity.

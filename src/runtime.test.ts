@@ -118,7 +118,7 @@ describe('createPresenceRuntime', () => {
   it('pushes an activity for the active worktree once started', async () => {
     const h = runtime()
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude · 1 agent working|📁 orca · 1 active workspace'])
+    assert.deepEqual(h.applied, ['Claude · 1 agent · Working|📁 orca · 1 workspace'])
   })
 
   it('reports the state it is in', async () => {
@@ -127,7 +127,7 @@ describe('createPresenceRuntime', () => {
     const status = h.instance.getStatus()
     assert.equal(status.discordConnected, true)
     assert.equal(status.orcaRunning, true)
-    assert.equal(status.lastActivity?.details, 'Claude · 1 agent working')
+    assert.equal(status.lastActivity?.details, 'Claude · 1 agent · Working')
   })
 
   it('clears the activity when Orca closes', async () => {
@@ -225,11 +225,11 @@ describe('createPresenceRuntime', () => {
     // Discord shows nothing.
     const h = runtime()
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude · 1 agent working|📁 orca · 1 active workspace'])
+    assert.deepEqual(h.applied, ['Claude · 1 agent · Working|📁 orca · 1 workspace'])
     await h.instance.pause()
     assert.equal(h.cleared(), 1)
     await h.instance.start()
-    assert.deepEqual(h.applied, ['Claude · 1 agent working|📁 orca · 1 active workspace', 'Claude · 1 agent working|📁 orca · 1 active workspace'])
+    assert.deepEqual(h.applied, ['Claude · 1 agent · Working|📁 orca · 1 workspace', 'Claude · 1 agent · Working|📁 orca · 1 workspace'])
   })
 
   it('re-pushes after a stop and start', async () => {
@@ -311,9 +311,9 @@ describe('createPresenceRuntime', () => {
       background = 2
       await instance.start()
       assert.deepEqual(sent.map(activity => activity.details), [
-        'Codex · 1 agent working', 'Codex · 2 agents working'
+        'Codex · 2 agents · Idle', 'Codex · 3 agents · Idle'
       ])
-      assert.equal(sent[1]?.state, '📁 selected · 1 active workspace')
+      assert.equal(sent[1]?.state, '📁 selected · 2 workspaces')
       assert.equal(sent[1]?.largeImageText, 'selected-model')
       assert.equal(sent[1]?.startTimestamp, sent[0]?.startTimestamp)
     } finally {

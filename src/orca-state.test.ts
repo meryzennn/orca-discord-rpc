@@ -16,7 +16,7 @@ function envelope(worktrees: unknown[]): string {
 }
 
 describe('activityCounts', () => {
-  it('counts working rows and their workspaces globally without an agent allowlist', () => {
+  it('counts all agent rows and their workspaces globally without an agent allowlist', () => {
     const worktrees = parseWorktreePs(envelope([
       { isActive: true, agents: [
         { agentType: 'codex', state: 'working' },
@@ -31,17 +31,20 @@ describe('activityCounts', () => {
         { agentType: 'codex', state: 'done' }, { agentType: 'codex', state: 'WORKING' }] },
       { agents: null }, null
     ]))!
-    assert.deepEqual(activityCounts(worktrees), { runningAgentCount: 3, activeWorkspaceCount: 2 })
+    assert.deepEqual(activityCounts(worktrees), { runningAgentCount: 8, activeWorkspaceCount: 3 })
     assert.deepEqual(activityCounts([]), { runningAgentCount: 0, activeWorkspaceCount: 0 })
   })
 
-  it('does not confuse selected with working, or count idle open agents', () => {
+  it('counts open agents across workspaces, regardless of state', () => {
     assert.deepEqual(activityCounts([
       { isActive: true, agents: [{ agentType: 'codex', state: 'done' }] },
       { isActive: false, agents: [{ agentType: 'omp', state: 'working' }] }
-    ]), { runningAgentCount: 1, activeWorkspaceCount: 1 })
+    ]), { runningAgentCount: 2, activeWorkspaceCount: 2 })
     assert.deepEqual(activityCounts([
       { isActive: true, agents: [{ agentType: 'codex', state: 'waiting' }] }
+    ]), { runningAgentCount: 1, activeWorkspaceCount: 1 })
+    assert.deepEqual(activityCounts([
+      { isActive: true, agents: [{ state: 'waiting' }] }
     ]), { runningAgentCount: 0, activeWorkspaceCount: 0 })
   })
 })

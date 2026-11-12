@@ -14,6 +14,7 @@ export function buildPluginActivity(input: PresenceInput): PresenceActivity {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...(input.incognito !== undefined ? { incognito: input.incognito } : {}),
+    ...(input.agentActive !== undefined ? { agentActive: input.agentActive } : {}),
     ...(input.model !== undefined ? { model: input.model } : {})
   })
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt }

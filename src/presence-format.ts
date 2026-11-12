@@ -51,6 +51,8 @@ export type TextInput = {
   runningAgentCount: number
   /** Workspaces containing at least one working agent, across the snapshot. */
   activeWorkspaceCount: number
+  /** False when the featured agent is between turns. */
+  agentActive?: boolean
 }
 
 export type PresenceText = {
@@ -70,10 +72,11 @@ export function composeText(input: TextInput): PresenceText {
   }
   const count = countOf(input.runningAgentCount)
   const workspaces = countOf(input.activeWorkspaceCount)
-  const agentCount = `${count} ${count === 1 ? FORMAT.agentWorkingOne : FORMAT.agentWorkingMany}`
-  const workspaceCount = `${workspaces} ${workspaces === 1 ? FORMAT.workspaceActiveOne : FORMAT.workspaceActiveMany}`
+  const status = input.agentActive === false ? FORMAT.idle : FORMAT.working
+  const agentCount = `${count} ${count === 1 ? FORMAT.agentOne : FORMAT.agentMany}`
+  const agentSuffix = `${FORMAT.separator}${agentCount}${FORMAT.separator}${status}`
   const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT))
-  const agentSuffix = `${FORMAT.separator}${agentCount}`
+  const workspaceCount = `${workspaces} ${workspaces === 1 ? FORMAT.workspaceOne : FORMAT.workspaceMany}`
   const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName))
   const workspaceSuffix = `${FORMAT.separator}${workspaceCount}`
   const folderLine = folder

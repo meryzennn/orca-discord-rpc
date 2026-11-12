@@ -124,7 +124,7 @@ describe('agent registry', () => {
       const config = loadConfig({ env: {}, readConfigFile: () => readConfigFile(path) })
       const registry = createAgentRegistry({ overrides: config.agents })
       const input = { projectName: 'app', agentType: 'new-agent', runningAgentCount: 1, activeWorkspaceCount: 1, startedAt: new Date(0) }
-      assert.equal(buildPluginActivity({ ...input, registry }).details, 'Brand New · 1 agent working')
+      assert.equal(buildPluginActivity({ ...input, registry }).details, 'Brand New · 1 agent · Working')
       assert.equal(buildPluginActivity({ ...input, registry }).smallImageUrl, 'https://example.com/b.png')
     } finally { rmSync(root, { recursive: true, force: true }) }
   })

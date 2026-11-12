@@ -164,7 +164,7 @@ export function activityCounts(worktrees: readonly OrcaWorktree[]): {
   let runningAgentCount = 0
   let activeWorkspaceCount = 0
   for (const worktree of worktrees) {
-    const count = allAgents(worktree).filter(agent => agent.state === 'working').length
+    const count = allAgents(worktree).length
     runningAgentCount += count
     if (count > 0) activeWorkspaceCount += 1
   }

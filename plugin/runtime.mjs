@@ -1084,7 +1084,7 @@ function activityCounts(worktrees) {
   let runningAgentCount = 0;
   let activeWorkspaceCount = 0;
   for (const worktree of worktrees) {
-    const count = allAgents(worktree).filter((agent) => agent.state === "working").length;
+    const count = allAgents(worktree).length;
     runningAgentCount += count;
     if (count > 0) activeWorkspaceCount += 1;
   }
@@ -1148,6 +1148,7 @@ async function readPresenceState(runWorktreePs = runOrcaWorktreePs, resolveRepoU
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
     ...activityCounts(worktrees),
+    agentActive: featured?.state === "working",
     branchName: branchNameFor(active),
     ...resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {}
   };
@@ -1210,10 +1211,12 @@ var presence_format_default = {
   noAgentState: "",
   folderPrefix: "\u{1F4C1} ",
   separator: " \xB7 ",
-  agentWorkingOne: "agent working",
-  agentWorkingMany: "agents working",
-  workspaceActiveOne: "active workspace",
-  workspaceActiveMany: "active workspaces",
+  agentOne: "agent",
+  agentMany: "agents",
+  working: "Working",
+  idle: "Idle",
+  workspaceOne: "workspace",
+  workspaceMany: "workspaces",
   privateProject: "Private Project",
   repositoryButton: "View Repository",
   branchFallback: "Branch"
@@ -1249,10 +1252,11 @@ function composeText(input) {
   }
   const count = countOf(input.runningAgentCount);
   const workspaces = countOf(input.activeWorkspaceCount);
-  const agentCount = `${count} ${count === 1 ? FORMAT.agentWorkingOne : FORMAT.agentWorkingMany}`;
-  const workspaceCount = `${workspaces} ${workspaces === 1 ? FORMAT.workspaceActiveOne : FORMAT.workspaceActiveMany}`;
+  const status = input.agentActive === false ? FORMAT.idle : FORMAT.working;
+  const agentCount = `${count} ${count === 1 ? FORMAT.agentOne : FORMAT.agentMany}`;
+  const agentSuffix = `${FORMAT.separator}${agentCount}${FORMAT.separator}${status}`;
   const agent = field(clip(normalizeText(input.agentName), FIELD_LIMIT));
-  const agentSuffix = `${FORMAT.separator}${agentCount}`;
+  const workspaceCount = `${workspaces} ${workspaces === 1 ? FORMAT.workspaceOne : FORMAT.workspaceMany}`;
   const folder = field(normalizeText(input.incognito ? FORMAT.privateProject : input.projectName));
   const workspaceSuffix = `${FORMAT.separator}${workspaceCount}`;
   const folderLine = folder ? clip(`${FORMAT.folderPrefix}${folder}`, Math.min(FOLDER_LIMIT, FIELD_LIMIT - workspaceSuffix.length)) : "";
@@ -1274,6 +1278,7 @@ function buildActivity(input) {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
+    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {},
     ...input.model !== void 0 ? { model: input.model } : {}
   });
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };
@@ -1325,6 +1330,7 @@ function createPresenceController(deps) {
         model: state.model ?? null,
         count: state.runningAgentCount,
         workspaces: state.activeWorkspaceCount,
+        active: state.agentActive !== false,
         branch: state.branchName,
         repo: state.repoUrl ?? null
       });
@@ -1338,6 +1344,7 @@ function createPresenceController(deps) {
         model: state.model ?? null,
         runningAgentCount: state.runningAgentCount,
         activeWorkspaceCount: state.activeWorkspaceCount,
+        agentActive: state.agentActive,
         branchName: state.branchName,
         repoUrl: state.repoUrl ?? null,
         startedAt,
@@ -1548,6 +1555,7 @@ function buildPluginActivity(input) {
     runningAgentCount: input.runningAgentCount,
     activeWorkspaceCount: input.activeWorkspaceCount,
     ...input.incognito !== void 0 ? { incognito: input.incognito } : {},
+    ...input.agentActive !== void 0 ? { agentActive: input.agentActive } : {},
     ...input.model !== void 0 ? { model: input.model } : {}
   });
   if (agent === null) return { details: text.details, state: text.state, startTimestamp: input.startedAt };

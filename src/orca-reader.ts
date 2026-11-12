@@ -80,6 +80,7 @@ export async function readPresenceState(
     agentType,
     model: agentType === null ? null : findModel(agentType, path),
     ...activityCounts(worktrees),
+    agentActive: featured?.state === 'working',
     branchName: branchNameFor(active),
     ...(resolveRepoUrl ? { repoUrl: path ? await resolveRepoUrl(path) : null } : {})
   }
