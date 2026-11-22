@@ -47,6 +47,19 @@ describe('activityCounts', () => {
       { isActive: true, agents: [{ state: 'waiting' }] }
     ]), { runningAgentCount: 0, activeWorkspaceCount: 0 })
   })
+
+  it('excludes sleeping, inactive, archived workspaces and agents without live PTYs', () => {
+    assert.deepEqual(activityCounts([
+      { isActive: true, status: 'active', liveTerminalCount: 1, hasAttachedPty: true, terminalVerdict: 'live',
+        agents: [{ agentType: 'antigravity', state: 'done', hasLivePty: true }] },
+      { isActive: false, status: 'inactive', liveTerminalCount: 0, hasAttachedPty: false, terminalVerdict: 'none',
+        agents: [{ agentType: 'omp', state: 'done' }] },
+      { isActive: false, isArchived: true, agents: [{ agentType: 'codex', state: 'done' }] },
+      { isActive: false, terminalVerdict: 'none', agents: [{ agentType: 'claude', state: 'done' }] },
+      { isActive: false, hasAttachedPty: false, liveTerminalCount: 0, agents: [{ agentType: 'claude', state: 'done' }] },
+      { isActive: false, status: 'active', agents: [{ agentType: 'codex', state: 'done', hasLivePty: false }] }
+    ]), { runningAgentCount: 1, activeWorkspaceCount: 1 })
+  })
 })
 
 describe('parseWorktreePs', () => {
@@ -85,6 +98,19 @@ describe('selectActiveWorktree', () => {
     const parsed = parseWorktreePs(envelope([{ worktreeId: 'a' }]))
     assert.ok(parsed)
     assert.equal(selectActiveWorktree(parsed), null)
+  })
+
+  it('ignores a selected workspace that is sleeping or archived', () => {
+    for (const sleeping of [
+      { worktreeId: 'a', isActive: true, status: 'inactive', liveTerminalCount: 0, hasAttachedPty: false, terminalVerdict: 'none' },
+      { worktreeId: 'b', isActive: true, isArchived: true },
+      { worktreeId: 'c', isActive: true, terminalVerdict: 'none' },
+      { worktreeId: 'd', isActive: true, hasAttachedPty: false, liveTerminalCount: 0 }
+    ]) {
+      const parsed = parseWorktreePs(envelope([sleeping]))
+      assert.ok(parsed)
+      assert.equal(selectActiveWorktree(parsed), null)
+    }
   })
 })
 

@@ -1011,18 +1011,27 @@ function parseWorktreePs(stdout) {
     agents: Array.isArray(worktree.agents) ? worktree.agents.filter(isRecord2) : []
   }));
 }
+function isSleepingWorktree(worktree) {
+  if (!worktree) return false;
+  if (worktree.isArchived === true) return true;
+  if (worktree.status === "inactive") return true;
+  if (worktree.terminalVerdict === "none") return true;
+  if (worktree.hasAttachedPty === false && worktree.liveTerminalCount === 0) return true;
+  return false;
+}
 function selectActiveWorktree(worktrees) {
-  return worktrees.find((worktree) => worktree.isActive === true) ?? null;
+  const active = worktrees.find((worktree) => worktree.isActive === true) ?? null;
+  return active && !isSleepingWorktree(active) ? active : null;
 }
 function hasAgentType(agent) {
   return typeof agent.agentType === "string" && agent.agentType.length > 0;
 }
 function allAgents(worktree) {
-  if (!worktree) {
+  if (!worktree || isSleepingWorktree(worktree)) {
     return [];
   }
   return (worktree.agents ?? []).filter(
-    (agent) => typeof agent.state === "string" && hasAgentType(agent)
+    (agent) => typeof agent.state === "string" && hasAgentType(agent) && agent.hasLivePty !== false
   );
 }
 function liveAgents(worktree) {

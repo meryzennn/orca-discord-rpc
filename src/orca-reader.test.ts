@@ -56,6 +56,29 @@ it('combines background totals with only the selected workspace identity and loo
   assert.deepEqual(repoCalls, ['/selected'])
 })
 
+it('hides a sleeping selected workspace and ignores sleeping background workspaces', async () => {
+  const snapshot = async () => JSON.stringify({ ok: true, result: { worktrees: [
+    { isActive: true, path: '/sleeping-selected', branch: 'refs/heads/main',
+      status: 'inactive', liveTerminalCount: 0, hasAttachedPty: false, terminalVerdict: 'none',
+      agents: [{ agentType: 'omp', state: 'done' }] },
+    { isActive: false, path: '/sleeping-bg',
+      status: 'inactive', liveTerminalCount: 0, hasAttachedPty: false, terminalVerdict: 'none',
+      agents: [{ agentType: 'claude', state: 'done' }] },
+    { isActive: false, path: '/awake-bg',
+      status: 'working', liveTerminalCount: 1, hasAttachedPty: true, terminalVerdict: 'live',
+      agents: [{ agentType: 'antigravity', state: 'working', hasLivePty: true }] }
+  ] } })
+  const state = await readPresenceState(
+    snapshot,
+    async () => { throw new Error('A sleeping workspace must not read git repo') },
+    () => { throw new Error('A sleeping workspace must not trigger model lookup') }
+  )
+  assert.deepEqual(state, {
+    projectName: null, agentType: null, model: null,
+    runningAgentCount: 1, activeWorkspaceCount: 1, agentActive: false, branchName: null, repoUrl: null
+  })
+})
+
 it('keeps malformed snapshots distinct from empty snapshots and propagates command errors', async () => {
   for (const stdout of ['not json', '{"ok":false}', '{"ok":true,"result":{}}']) {
     assert.equal(await readPresenceState(async () => stdout), null)

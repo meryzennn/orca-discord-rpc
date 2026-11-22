@@ -2,6 +2,7 @@
 export type OrcaAgent = {
   state?: string
   agentType?: string
+  hasLivePty?: boolean
   stateStartedAt?: number
   updatedAt?: number
 }
@@ -12,6 +13,11 @@ export type OrcaWorktree = {
   branch?: string
   path?: string
   isActive?: boolean
+  isArchived?: boolean
+  status?: string
+  liveTerminalCount?: number
+  hasAttachedPty?: boolean
+  terminalVerdict?: string
   lastActivityAt?: number
   /** Orca's persisted user-authored fields; only the pinned label matters here. */
   meta?: { displayNameIsPinned?: boolean }
@@ -47,21 +53,35 @@ export function parseWorktreePs(stdout: string): OrcaWorktree[] | null {
   })) as OrcaWorktree[]
 }
 
+/**
+ * Sleeping or archived workspaces keep persisted agent rows in `orca worktree ps --json`
+ * even with no live terminals attached; exclude them from selection and global counts.
+ */
+export function isSleepingWorktree(worktree: OrcaWorktree | null): boolean {
+  if (!worktree) return false
+  if (worktree.isArchived === true) return true
+  if (worktree.status === 'inactive') return true
+  if (worktree.terminalVerdict === 'none') return true
+  if (worktree.hasAttachedPty === false && worktree.liveTerminalCount === 0) return true
+  return false
+}
+
 export function selectActiveWorktree(worktrees: readonly OrcaWorktree[]): OrcaWorktree | null {
-  return worktrees.find((worktree) => worktree.isActive === true) ?? null
+  const active = worktrees.find((worktree) => worktree.isActive === true) ?? null
+  return active && !isSleepingWorktree(active) ? active : null
 }
 
 function hasAgentType(agent: OrcaAgent): boolean {
   return typeof agent.agentType === 'string' && agent.agentType.length > 0
 }
 
-/** Every agent that can be named, whatever its state. */
+/** Every live-workspace agent that can be named, whatever its turn state. */
 export function allAgents(worktree: OrcaWorktree | null): OrcaAgent[] {
-  if (!worktree) {
+  if (!worktree || isSleepingWorktree(worktree)) {
     return []
   }
   return (worktree.agents ?? []).filter(
-    (agent) => typeof agent.state === 'string' && hasAgentType(agent)
+    (agent) => typeof agent.state === 'string' && hasAgentType(agent) && agent.hasLivePty !== false
   )
 }
 
